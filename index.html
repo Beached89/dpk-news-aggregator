@@ -10,6 +10,17 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         body { font-family: "Inter", sans-serif; }
         .news-card:hover { transform: translateY(-2px); transition: all 0.2s ease; }
+
+        /* Mobile menu */
+        #mobile-menu { display: none; }
+        #mobile-menu.open { display: block; }
+
+        /* Ensure readable text on small screens */
+        @media (max-width: 640px) {
+            .source-text { font-size: 11px !important; }
+            h3.mobile-title { font-size: 1.25rem !important; }
+            h4.mobile-subtitle { font-size: 0.95rem !important; }
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -28,7 +39,20 @@
                 <a href="#" class="hover:text-slate-900">Economy</a>
                 <a href="#" class="hover:text-slate-900">Human Rights</a>
             </nav>
+
+            <!-- Mobile Hamburger Button -->
+            <button id="menu-toggle" class="md:hidden p-2 rounded hover:bg-slate-100 touch-manipulation" aria-label="Toggle menu">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
         </div>
+
+        <!-- Mobile Menu -->
+        <nav id="mobile-menu" class="md:hidden border-t border-slate-200 py-3 px-4">
+            <a href="#" class="block py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 border-b border-slate-100">Politics</a>
+            <a href="#" class="block py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 border-b border-slate-100">Military</a>
+            <a href="#" class="block py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 border-b border-slate-100">Economy</a>
+            <a href="#" class="block py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900">Human Rights</a>
+        </nav>
     </header>
 
     <main class="max-w-6xl mx-auto px-4 py-8">
@@ -44,30 +68,30 @@
                         [Feature Image Placeholder]
                     </div>
                     <span class="text-xs font-bold text-blue-600 uppercase">Policy Update</span>
-                    <h3 class="text-2xl font-bold mt-2 mb-3 leading-tight">Official Decree: New Economic Development Plan for 2025-2030</h3>
+                    <h3 class="text-2xl font-bold mt-2 mb-3 leading-tight mobile-title">Official Decree: New Economic Development Plan for 2025-2030</h3>
                     <p class="text-slate-600 mb-4">Summary of the latest state-issued directives regarding industrial growth, agricultural quotas, and domestic trade regulations. Analysis based on KCNA reports and Rodong Sinmun editorials...</p>
                     <div class="flex items-center gap-4 text-xs text-slate-400">
-                        <span class="\">Source: KCNA</span>
-                        <span class="\">•</span>
-                        <span class="\">Published: 2024-10-27</span>
+                        <span class="source-text">Source: KCNA</span>
+                        <span>•</span>
+                        <span class="source-text">Published: 2024-10-27</span>
                     </div>
                 </div>
                 <div class="space-y-6">
-                    <div class="bg-white p-4 rounded-lg border border-slate-200 hover:border-slate-400 cursor-pointer transition-colors">
+                    <a href="#" class="block bg-white p-4 rounded-lg border border-slate-200 hover:border-slate-400 transition-colors">
                         <span class="text-xs font-bold text-blue-600 uppercase">Military</span>
-                        <h4 class="font-bold text-sm mt-1">KPA Training Exercises in Northern Region</h4>
+                        <h4 class="font-bold text-sm mt-1 mobile-subtitle">KPA Training Exercises in Northern Region</h4>
                         <p class="text-xs text-slate-500 mt-1">Brief summary of observed military maneuvers and movements...</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-lg border border-slate-200 hover:border-slate-400 cursor-pointer transition-colors">
+                    </a>
+                    <a href="#" class="block bg-white p-4 rounded-lg border border-slate-200 hover:border-slate-400 transition-colors">
                         <span class="text-xs font-bold text-blue-600 uppercase">International</span>
-                        <h4 class="font-bold text-sm mt-1">UN Security Council Discussion on Sanctions</h4>
+                        <h4 class="font-bold text-sm mt-1 mobile-subtitle">UN Security Council Discussion on Sanctions</h4>
                         <p class="text-xs text-slate-500 mt-1">Reporting on the latest diplomatic friction regarding trade restrictions...</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-lg border border-slate-200 hover:border-slate-400 cursor-pointer transition-colors">
+                    </a>
+                    <a href="#" class="block bg-white p-4 rounded-lg border border-slate-200 hover:border-slate-400 transition-colors">
                         <span class="text-xs font-bold text-blue-600 uppercase">Economy</span>
-                        <h4 class="font-bold text-sm mt-1">Market Trends in Sinuiju and Chongjin</h4>
+                        <h4 class="font-bold text-sm mt-1 mobile-subtitle">Market Trends in Sinuiju and Chongjin</h4>
                         <p class="text-xs text-slate-500 mt-1">Analysis of local trade dynamics and currency fluctuations...</p>
-                    </div>
+                    </a>
                 </div>
             </div>
         </section>
@@ -80,46 +104,46 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- News Item 1 -->
-                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm news-card">
+                <a href="#" class="block bg-white p-5 rounded-xl border border-slate-200 shadow-sm news-card">
                     <div class="bg-slate-100 h-32 w-full rounded-md mb-4 flex items-center justify-center text-slate-300">
                         [Image Placeholder]
                     </div>
-                    <span class="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">POLITICS</span>
-                    <h4 class="font-bold mt-2 text-slate-900">New Governance Initiative Announced in Pyongyang</h4>
+                    <span class="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded source-text">POLITICS</span>
+                    <h4 class="font-bold mt-2 text-slate-900 mobile-subtitle">New Governance Initiative Announced in Pyongyang</h4>
                     <p class="text-sm text-slate-600 mt-2 line-clamp-3">A summary of the newly announced administrative changes aimed at improving urban management...</p>
-                    <div class="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold">
-                        <span class="\">Source: Rodong Sinmun</span>
-                        <span class="\">2 hours ago</span>
+                    <div class="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold source-text">
+                        <span>Source: Rodong Sinmun</span>
+                        <span>2 hours ago</span>
                     </div>
-                </div>
+                </a>
 
                 <!-- News Item 2 -->
-                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm news-card">
+                <a href="#" class="block bg-white p-5 rounded-xl border border-slate-200 shadow-sm news-card">
                     <div class="bg-slate-100 h-32 w-full rounded-md mb-4 flex items-center justify-center text-slate-300">
                         [Image Placeholder]
                     </div>
-                    <span class="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">MILITARY</span>
-                    <h4 class="font-bold mt-2 text-slate-900">Satellite Analysis of Coastal Defense Sites</h4>
+                    <span class="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded source-text">MILITARY</span>
+                    <h4 class="font-bold mt-2 text-slate-900 mobile-subtitle">Satellite Analysis of Coastal Defense Sites</h4>
                     <p class="text-sm text-slate-600 mt-2 line-clamp-3">Independent analysis from 38 North regarding infrastructure updates on the eastern coast...</p>
-                    <div class="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold">
-                        <span class="\">Source: 38 North</span>
-                        <span class="\">5 hours ago</span>
+                    <div class="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold source-text">
+                        <span>Source: 38 North</span>
+                        <span>5 hours ago</span>
                     </div>
-                </div>
+                </a>
 
                 <!-- News Item 3 -->
-                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm news-card">
+                <a href="#" class="block bg-white p-5 rounded-xl border border-slate-200 shadow-sm news-card">
                     <div class="bg-slate-100 h-32 w-full rounded-md mb-4 flex items-center justify-center text-slate-300">
                         [Image Placeholder]
                     </div>
-                    <span class="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">ECONOMY</span>
-                    <h4 class="font-bold mt-2 text-slate-900">Trade Relations Update with Regional Partners</h4>
+                    <span class="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded source-text">ECONOMY</span>
+                    <h4 class="font-bold mt-2 text-slate-900 mobile-subtitle">Trade Relations Update with Regional Partners</h4>
                     <p class="text-sm text-slate-600 mt-2 line-clamp-3">Detailed summary of NK News' report on the latest trade agreements and sanctions impacts...</p>
-                    <div class="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold">
-                        <span class="\">Source: NK News</span>
-                        <span class="\">1 day ago</span>
+                    <div class="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold source-text">
+                        <span>Source: NK News</span>
+                        <span>1 day ago</span>
                     </div>
-                </div>
+                </a>
             </div>
         </section>
     </main>
@@ -129,5 +153,26 @@
             <p class="text-slate-400 text-sm">&copy; 2024 DPRK News Aggregator. Data compiled from official and independent specialist sources.</p>
         </div>
     </footer>
+
+    <!-- Mobile Menu Toggle Script -->
+    <script>
+        document.getElementById('menu-toggle').addEventListener('click', function() {
+            var menu = document.getElementById('mobile-menu');
+            if (menu.classList.contains('open')) {
+                menu.classList.remove('open');
+            } else {
+                menu.classList.add('open');
+            }
+        });
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(e) {
+            var menu = document.getElementById('mobile-menu');
+            var toggle = document.getElementById('menu-toggle');
+            if (!menu.contains(e.target) && !toggle.contains(e.target)) {
+                menu.classList.remove('open');
+            }
+        });
+    </script>
 </body>
 </html>
