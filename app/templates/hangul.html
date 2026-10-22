@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}조선어 · Hangul/Chosŏn'gŭl — Kim Jong Lingo{% endblock %}
+{% block content %}
+  <h1 class="section-h">조선어 · Hangul/Chosŏn'gŭl</h1>
+
+  <div class="library-intro">
+    <p><strong>{{ collection.title }}</strong> — {{ collection.publisher }}.
+    Official DPRK-published textbooks for reading and speaking Korean in the
+    Pyongyang standard (문화어), self-hosted on this site.</p>
+  </div>
+
+  {% set locals = texts | selectattr('local_url') | list %}
+  {% if locals %}
+    {% set ns = namespace(done=false) %}
+    <div class="library-layout">
+      <nav class="book-nav">
+        {% for t in texts %}
+          {% set is_first_local = t.local_url and not ns.done %}
+          <button class="book-btn{{ ' on' if is_first_local else '' }}"
+                  {% if t.local_url %}data-src="{{ t.local_url }}"{% else %}disabled title="아직 받지 못함 (not downloaded yet)"{% endif %}>
+            <span class="bk-title">{{ t.title }}</span>
+            {% if t.sub %}<span class="bk-sub">• {{ t.sub }}</span>{% endif %}
+            {% if not t.local_url %}<span class="bk-pending">⏳ pending</span>{% endif %}
+          </button>
+          {% if is_first_local %}{% set ns.done = true %}{% endif %}
+        {% endfor %}
+      </nav>
+
+      <div class="pdf-main">
+        <div id="pdf-stage" class="pdf-stage"><canvas id="pdf-canvas"></canvas></div>
+        <div class="pdf-bar">
+          <button id="pv-prev" class="pv-btn" title="Previous page">◀</button>
+          <span class="pv-pages"><input id="pv-page" type="number" min="1" value="1"> / <span id="pv-count">–</span></span>
+          <button id="pv-next" class="pv-btn" title="Next page">▶</button>
+          <span class="pv-spacer"></span>
+          <button id="pv-zout" class="pv-btn" title="Zoom out">−</button>
+          <span id="pv-zoom" class="pv-zoom">100%</span>
+          <button id="pv-zin" class="pv-btn" title="Zoom in">+</button>
+          <a id="pv-dl" class="pv-dl" href="{{ locals[0].local_url }}" download>↓ PDF</a>
+        </div>
+        {% if locals|length < texts|length %}
+        <p class="library-note">{{ locals|length }} of {{ texts|length }} volumes are downloaded.
+        The rest appear once the <code>library</code> container finishes fetching them.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      const LOCAL_JS = "/media/_assets/pdfjs/pdf.min.js";
+      const LOCAL_W  = "/media/_assets/pdfjs/pdf.worker.min.js";
+      const CDN_JS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+      const CDN_W  = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+      const stage = document.getElementById('pdf-stage');
+      const canvas = document.getElementById('pdf-canvas');
+      const ctx = canvas.getContext('2d');
+      const pageInput = document.getElementById('pv-page');
+      const countEl = document.getElementById('pv-count');
+      const zoomEl = document.getElementById('pv-zoom');
+      const dl = document.getElementById('pv-dl');
+
+      let pdf = null, cur = 1, zoom = 1, rendering = false, pending = null;
+      // Aspect (w/h) of the reference two-page spread, captured from the first
+      // page rendered. Every book is then scaled to the SAME height as that
+      // spread, so portrait single-page books shrink to fit instead of towering.
+      let refAspect = null;
+
+      function loadScript(src) {
+        return new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = src; s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+      async function ensurePdfjs() {
+        try { await loadScript(LOCAL_JS); pdfjsLib.GlobalWorkerOptions.workerSrc = LOCAL_W; return true; }
+        catch (e) {}
+        try { await loadScript(CDN_JS); pdfjsLib.GlobalWorkerOptions.workerSrc = CDN_W; return true; }
+        catch (e) { return false; }
+      }
+
+      async function renderPage(n) {
+        if (!pdf) return;
+        if (rendering) { pending = n; return; }
+        rendering = true;
+        const page = await pdf.getPage(n);
+        const base = page.getViewport({ scale: 1 });
+        if (refAspect === null) refAspect = base.width / base.height;  // first spread sets the height
+        const stageW = stage.clientWidth - 2;
+        const targetH = stageW / refAspect;                  // the spreads' natural height
+        const fitW = stageW / base.width;                    // scale to fill the width
+        const fitH = targetH / base.height;                  // scale to the fixed height
+        // Use whichever keeps the whole page inside the fixed-height box: wide
+        // spreads fill the width; tall portrait pages shrink to the height.
+        const scale = Math.min(fitW, fitH) * zoom;
+        const dpr = window.devicePixelRatio || 1;
+        const viewport = page.getViewport({ scale: scale * dpr });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = (viewport.width / dpr) + 'px';
+        canvas.style.height = (viewport.height / dpr) + 'px';
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        pageInput.value = n;
+        rendering = false;
+        if (pending !== null) { const p = pending; pending = null; renderPage(p); }
+      }
+
+      async function loadDoc(url) {
+        pdf = await pdfjsLib.getDocument(url).promise;
+        cur = 1; zoom = 1; zoomEl.textContent = '100%';
+        countEl.textContent = pdf.numPages;
+        pageInput.max = pdf.numPages;
+        dl.href = url;
+        renderPage(cur);
+      }
+
+      function nativeFallback() {
+        stage.innerHTML = '';
+        const f = document.createElement('iframe');
+        f.src = (dl.getAttribute('href')) + '#view=FitH';
+        f.style.width = '100%'; f.style.height = '82vh'; f.style.border = '0';
+        stage.appendChild(f);
+      }
+
+      function go(n) { if (pdf && n >= 1 && n <= pdf.numPages) { cur = n; renderPage(cur); } }
+      document.getElementById('pv-prev').addEventListener('click', () => go(cur - 1));
+      document.getElementById('pv-next').addEventListener('click', () => go(cur + 1));
+      pageInput.addEventListener('change', () => go(parseInt(pageInput.value, 10) || 1));
+      document.getElementById('pv-zin').addEventListener('click', () => { zoom = Math.min(zoom + 0.2, 4); zoomEl.textContent = Math.round(zoom * 100) + '%'; renderPage(cur); });
+      document.getElementById('pv-zout').addEventListener('click', () => { zoom = Math.max(zoom - 0.2, 0.4); zoomEl.textContent = Math.round(zoom * 100) + '%'; renderPage(cur); });
+
+      let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => renderPage(cur), 200); });
+
+      document.querySelectorAll('.book-btn[data-src]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.book-btn').forEach(b => b.classList.remove('on'));
+          btn.classList.add('on');
+          loadDoc(btn.dataset.src);
+        });
+      });
+
+      (async () => {
+        const first = document.querySelector('.book-btn[data-src]');
+        if (!await ensurePdfjs()) { nativeFallback(); return; }
+        if (first) loadDoc(first.dataset.src);
+      })();
+    })();
+    </script>
+  {% else %}
+    <div class="library-empty">
+      <p>The texts haven't been downloaded yet. They are fetched automatically by
+      the one-shot <code>library</code> container — rebuild to run it:</p>
+      <pre>docker compose up -d --build</pre>
+    </div>
+  {% endif %}
+{% endblock %}

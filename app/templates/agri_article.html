@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ en_title or ko_title }} · Kim Jong Lingo{% endblock %}
+{% block content %}
+  <style>
+    .agri-doc { max-width: 860px; }
+    .agri-doc .en-title { font-size: 1.7rem; font-weight: 900; color: var(--ink); margin: 0 0 2px; }
+    .agri-doc .ko-title { font-size: 1.05rem; font-weight: 700; color: var(--muted); margin: 0 0 14px; }
+    .agri-doc .ko-line { font-size: 1.05rem; color: var(--ink); margin: 0 0 4px; }
+    .agri-doc .en-line { font-size: .95rem; color: var(--muted); margin: 0 0 18px; }
+  </style>
+
+  <p class="back"><a href="/agriculture">← 농업 목록</a></p>
+
+  <article class="agri-doc">
+    <header>
+      {% if en_title %}<h1 class="en-title">{{ en_title }}</h1>{% endif %}
+      {% if ko_title %}<p class="ko-title">{{ ko_title }}</p>{% endif %}
+      <div class="art-meta">
+        <span class="src-badge">{{ source|upper }}</span>
+        {% if date %}<time class="date">{{ date }}</time>{% endif %}
+      </div>
+    </header>
+
+    <div class="bi-body">
+      {% set n = [ko_paras|length, en_paras|length]|max %}
+      {% for i in range(n) %}
+        {% if i < ko_paras|length %}<p class="ko-line">{{ ko_paras[i] }}</p>{% endif %}
+        {% if i < en_paras|length %}<p class="en-line">{{ en_paras[i] }}</p>{% endif %}
+      {% endfor %}
+      {% if not ko_paras and not en_paras %}<p class="empty">본문이 저장되지 않았습니다.</p>{% endif %}
+    </div>
+
+    {% if url %}
+    <p class="source"><span class="source-label">원문 / Original:</span>
+      <a href="{{ url }}" rel="noreferrer">{{ source|upper }}</a></p>
+    {% endif %}
+  </article>
+{% endblock %}
