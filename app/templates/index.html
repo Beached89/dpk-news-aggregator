@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="{% if home %}layout{% endif %}">
+  <section class="feed">
+    <div class="section-head">
+      <h1>{% if active %}{% for c in nav_categories if c.key == active %}{{ c.label_en }}{% endfor %}{% else %}Latest News{% endif %}</h1>
+      <span class="count">{{ total }}</span>
+    </div>
+
+    {% if not articles and not lead %}
+      <div class="empty">
+        <p>아직 미러된 기사가 없습니다.</p>
+        <p><code>docker compose up</code> 로 스크레이퍼를 실행하세요.</p>
+      </div>
+    {% else %}
+      {% if lead %}
+      <a class="lead" href="/article/{{ lead.hash }}">
+        {% if lead.thumb %}<div class="lead-thumb"><img src="{{ lead.thumb }}" alt="" loading="lazy"></div>{% endif %}
+        <div class="lead-body">
+          <div class="meta">
+            {% for c in lead.categories %}<span class="tag">{{ c.en }}</span>{% endfor %}
+            {% if lead.sources and lead.sources|length > 1 %}<span class="src-badge">KCNA·Rodong</span>{% endif %}
+            {% if lead.date %}<time>{{ lead.date }}</time>{% endif %}
+          </div>
+          <h2>{{ lead.title }}</h2>
+          {% if lead.en_title %}<p class="en-title-card">{{ lead.en_title }}</p>{% endif %}
+          <p class="snippet">{{ lead.snippet }}…</p>
+        </div>
+      </a>
+      {% endif %}
+
+      <div class="card-grid">
+        {% for a in articles %}
+          <a class="card" href="/article/{{ a.hash }}">
+            <div class="card-thumb {{ '' if a.thumb else 'is-empty' }}">
+              {% if a.thumb %}<img src="{{ a.thumb }}" alt="" loading="lazy">{% elif placeholder %}<img class="placeholder-logo" src="{{ placeholder }}" alt="Rodong" loading="lazy" onerror="this.remove()">{% endif %}
+            </div>
+            <div class="card-text">
+              <div class="meta">
+                {% for c in a.categories[:2] %}<span class="tag">{{ c.en }}</span>{% endfor %}
+                {% if a.sources and a.sources|length > 1 %}<span class="src-badge">KCNA·Rodong</span>{% endif %}
+                {% if a.date %}<time>{{ a.date }}</time>{% endif %}
+              </div>
+              <h3>{{ a.title }}</h3>
+              {% if a.en_title %}<p class="en-title-card">{{ a.en_title }}</p>{% endif %}
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+
+      {% if home %}
+        {% if total > 10 %}<p class="more-news"><a href="/news">모든 소식 보기 · More News →</a></p>{% endif %}
+      {% else %}
+        <div class="pager">
+          {% if page > 1 %}<a href="/news?page={{ page-1 }}{% if active %}&cat={{ active }}{% endif %}">← 이전</a>{% else %}<span></span>{% endif %}
+          {% if has_next %}<a href="/news?page={{ page+1 }}{% if active %}&cat={{ active }}{% endif %}">다음 →</a>{% endif %}
+        </div>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  {% if home %}
+  <aside class="sidebar">
+    <div class="vid-rail">
+      <div class="section-head"><h1>동영상 · Video</h1></div>
+      {% if side_videos %}
+        <ul class="side-videos">
+          {% for v in side_videos %}
+            <li><a class="side-video" href="/video/{{ v.id }}">
+              <span class="side-video-thumb">
+                {% if v.poster %}<img src="{{ v.poster }}" alt="" loading="lazy">{% endif %}
+                <span class="side-play">▶</span>
+              </span>
+              <span class="side-video-title">{{ v.title }}</span>
+            </a></li>
+          {% endfor %}
+        </ul>
+        <a class="side-more" href="/videos">모든 동영상 보기 →</a>
+      {% else %}
+        <p class="side-empty">아직 동영상이 없습니다.</p>
+      {% endif %}
+    </div>
+
+    <div class="vid-rail">
+      <div class="section-head"><h1>잡지 · Magazine</h1></div>
+      {% if side_magazines %}
+        <ul class="side-videos">
+          {% for m in side_magazines %}
+            <li><a class="side-video" href="/magazine/{{ m.id }}">
+              <span class="side-video-thumb">
+                {% if m.cover %}<img src="{{ m.cover }}" alt="" loading="lazy">{% endif %}
+              </span>
+              <span class="side-video-title">{{ m.title }}</span>
+            </a></li>
+          {% endfor %}
+        </ul>
+        <a class="side-more" href="/magazines">모든 잡지 보기 →</a>
+      {% else %}
+        <p class="side-empty">아직 잡지가 없습니다.</p>
+      {% endif %}
+    </div>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}

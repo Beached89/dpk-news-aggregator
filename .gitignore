@@ -1,0 +1,28 @@
+# --- Local runtime data (SQLite DB + downloaded media) ---------------------
+# NOTE the leading slash: this must be anchored to the repo root. An unanchored
+# `data/` also matches app/data/, which would silently drop the package's own
+# dict_ko_en.json KO->EN dictionary from the repo.
+/data/
+
+# --- Secrets ----------------------------------------------------------------
+# Copy .env.example to .env for local runs. Never commit a real key.
+.env
+.dev.vars
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# --- Node / Cloudflare Workers & Pages --------------------------------------
+node_modules/
+.wrangler/
+dist/
+
+# --- Editor / OS noise ------------------------------------------------------
+.DS_Store
+Thumbs.db
+.write_test

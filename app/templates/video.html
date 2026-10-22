@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Kim Jong Lingo{% endblock %}
+{% block content %}
+  <p class="back"><a href="/videos">← 동영상 목록</a></p>
+  <h1 class="article-main-title video-title-top">{{ title }}</h1>
+  {% if en_title and en_title != title %}<p class="video-title-en">{{ en_title }}</p>{% endif %}
+
+  <div class="layout video-layout">
+  <section class="feed">
+  <article class="video-article" id="video-article">
+    <figure class="video-figure">
+      <video id="vok-player" class="vok" controls preload="metadata" playsinline{% if poster %} poster="{{ poster }}"{% endif %}>
+        <source src="{{ mp4_url }}" type="video/mp4">
+        {% if ko_vtt %}<track kind="subtitles" src="{{ ko_vtt }}" srclang="ko" label="한국어" default>{% endif %}
+        {% if en_vtt %}<track kind="subtitles" src="{{ en_vtt }}" srclang="en" label="English">{% endif %}
+      </video>
+      <figcaption class="video-cc-note">자막: 영상 화면의 CC 버튼으로 한국어 / English 전환 · 자동 생성된 자막입니다 (Auto-generated subtitles)</figcaption>
+    </figure>
+
+    {% if segments %}
+    <section class="transcript" id="transcript">
+      <h2 class="transcript-h">대역 자막 · Transcript</h2>
+      {% for seg in segments %}
+        <div class="tline" data-start="{{ seg.start }}" data-end="{{ seg.end }}">
+          <span class="t-time">{{ seg.ts }}</span>
+          <div class="t-text">
+            <p class="t-ko">{{ seg.ko }}</p>
+            {% if seg.en %}<p class="t-en">{{ seg.en }}</p>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if source_url %}
+    <p class="source">
+      <span class="source-label">원문 / Original:</span>
+      <a href="{{ source_url }}" rel="noreferrer">Voice of Korea · 동영상</a>
+    </p>
+    {% endif %}
+  </article>
+  </section>
+
+  <aside class="sidebar">
+    <div class="side-box vocab-box">
+      <h3 class="side-title">주요 단어 · Key Words</h3>
+      {% if vocab %}
+        <ol class="vocab-list">
+          {% for v in vocab %}
+            <li><span class="vocab-ko">{{ v.ko }}</span><span class="vocab-en">{{ v.en or '—' }}</span></li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="side-empty">단어를 찾지 못했습니다.</p>
+      {% endif %}
+    </div>
+  </aside>
+  </div>
+
+  <script>
+    (function () {
+      const v = document.getElementById('vok-player');
+      const lines = Array.from(document.querySelectorAll('#transcript .tline'));
+      if (!v || !lines.length) return;
+
+      // Click a transcript line to jump the video there.
+      lines.forEach(l => l.addEventListener('click', () => {
+        const s = parseFloat(l.dataset.start);
+        if (!isNaN(s)) { v.currentTime = s + 0.01; v.play(); }
+      }));
+
+      // Highlight the line matching the current playback position.
+      let current = null;
+      v.addEventListener('timeupdate', () => {
+        const t = v.currentTime;
+        let hit = null;
+        for (const l of lines) {
+          const s = parseFloat(l.dataset.start), e = parseFloat(l.dataset.end);
+          if (t >= s && t < e) { hit = l; break; }
+        }
+        if (hit === current) return;
+        if (current) current.classList.remove('on');
+        current = hit;
+        if (current) { current.classList.add('on'); current.scrollIntoView({block: 'nearest'}); }
+      });
+    })();
+  </script>
+{% endblock %}

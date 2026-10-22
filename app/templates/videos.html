@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}동영상 · Video — Kim Jong Lingo{% endblock %}
+{% block content %}
+  <h1 class="section-h">동영상 · Video</h1>
+  {% if videos %}
+    <div class="video-grid">
+      {% for vd in videos %}
+        <a class="video-card" href="/video/{{ vd.id }}">
+          <div class="video-thumb">
+            {% if vd.poster %}<img src="{{ vd.poster }}" alt="" loading="lazy">{% endif %}
+            <span class="play-badge">▶</span>
+          </div>
+          <h3 class="video-title">{{ vd.title }}</h3>
+          {% if vd.snippet %}<p class="video-snippet">{{ vd.snippet }}</p>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">아직 자막이 달린 동영상이 없습니다. (No subtitled videos yet.)</p>
+  {% endif %}
+{% endblock %}

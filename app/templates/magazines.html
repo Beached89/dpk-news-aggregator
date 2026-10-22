@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}잡지 · Magazines — Kim Jong Lingo{% endblock %}
+{% block content %}
+  <h1 class="section-h">잡지 · Magazines</h1>
+  {% if magazines %}
+    <div class="video-grid">
+      {% for m in magazines %}
+        <a class="video-card" href="/magazine/{{ m.id }}">
+          <div class="mag-cover">
+            {% if m.cover %}<img src="{{ m.cover }}" alt="" loading="lazy">{% endif %}
+          </div>
+          <h3 class="video-title">{{ m.title }}</h3>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">아직 처리된 잡지가 없습니다. (No magazines processed yet.)</p>
+  {% endif %}
+{% endblock %}

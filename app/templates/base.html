@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="{{ lang|default('ko') }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Kim Jong Lingo{% endblock %}</title>
+  <link rel="icon" type="image/png" href="/static/logo.png">
+  <link rel="stylesheet" href="/static/style.css?v={{ css_v }}">
+  <style>
+    /* Site width +25% (1120 -> 1400). Inline so it ships with the template. */
+    .masthead-inner, .topnav-inner, .container { max-width: 1400px; }
+    /* Pin the masthead + nav together at the top (neither scrolls away). */
+    .site-top { position: sticky; top: 0; z-index: 60; background: var(--bg); }
+    .topnav { position: static; }
+    /* In-page sticky elements must clear the fixed header (height measured by
+       JS into --top-h; fallback covers first paint). */
+    :root { --top-h: 180px; }
+    .video-figure, .vocab-box, .mag-page-wrap { top: var(--top-h) !important; }
+  </style>
+</head>
+<body>
+  <div class="site-top">
+    <div class="masthead">
+      <div class="masthead-inner">
+        <a class="logo" href="/">
+          <img class="logo-badge" src="/static/logo.png" alt="Kim Jong Lingo" onerror="this.style.display='none'">
+          <span class="logo-main">Kim Jong Lingo</span>
+          <span class="logo-sub">Learning The Leader's Korean</span>
+        </a>
+        <div class="masthead-tag">조선어 + English 대역 학습</div>
+      </div>
+    </div>
+
+    <nav class="topnav">
+      <div class="topnav-inner">
+        <a class="nav-link" href="/news">소식 · News</a>
+        <a class="nav-link" href="/videos">동영상 · Video</a>
+        <a class="nav-link" href="/hangul">조선어 · Hangul/Chosŏn'gŭl</a>
+        <a class="nav-link" href="/magazines">잡지 · Magazines</a>
+      <a class="nav-link" href="/agriculture">농업 · Agriculture/Food</a>
+      </div>
+    </nav>
+  </div>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>Mirrored from kcna.kp for Korean-language study. Article text and media are reproduced unchanged; each article links to its original source.</p>
+    </div>
+  </footer>
+  <script>
+    // Keep --top-h in sync with the actual pinned-header height.
+    (function () {
+      function setTop() {
+        var t = document.querySelector('.site-top');
+        if (t) document.documentElement.style.setProperty('--top-h', (t.offsetHeight + 6) + 'px');
+      }
+      setTop();
+      window.addEventListener('resize', setTop);
+      window.addEventListener('load', setTop);
+    })();
+  </script>
+</body>
+</html>

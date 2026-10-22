@@ -1,0 +1,155 @@
+services:
+  # One-shot: fetch + hash-verify the 조선어 reading-room PDFs before scrapers run.
+  # Exits when done; re-running only re-downloads files that are missing/changed.
+  library:
+    build: .
+    image: dprk-learning
+    command: python -m app.library
+    volumes:
+      - ./data:/data
+    environment:
+      - DATA_DIR=/data
+    restart: "no"
+
+  web:
+    build: .
+    image: dprk-learning
+    command: uvicorn app.web:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - DATA_DIR=/data
+    restart: unless-stopped
+
+  # ---- Scrapers: one container per source, running in parallel. Each waits for
+  #      the library fetch to finish first. KCNA owns the shared maintenance pass.
+  scraper-kcna:
+    build: .
+    image: dprk-learning
+    command: python -m app.scrape --loop --source kcna --maintenance --langs ${KCNA_LANGS:-kp,en}
+    depends_on:
+      library:
+        condition: service_started
+    volumes:
+      - ./data:/data
+      - hf-cache:/root/.cache/huggingface
+    environment:
+      - DATA_DIR=/data
+      - KCNA_LANGS=${KCNA_LANGS:-kp,en}
+      - SCRAPE_INTERVAL_MIN=${SCRAPE_INTERVAL_MIN:-60}
+      - REQUEST_DELAY=${REQUEST_DELAY:-2.0}
+      - MAX_ARTICLES_PER_RUN=${MAX_ARTICLES_PER_RUN:-60}
+      - MAX_AGE_HOURS=${MAX_AGE_HOURS:-120}
+      - TRANSLATE_PROVIDER=${TRANSLATE_PROVIDER:-google_free}
+      - TRANSLATE_API_KEY=${TRANSLATE_API_KEY:-}
+      - TRANSLATE_API_URL=${TRANSLATE_API_URL:-}
+      - TRANSLATE_TARGET=${TRANSLATE_TARGET:-EN-US}
+      - TRANSLATE_TIMEOUT=${TRANSLATE_TIMEOUT:-60}
+    restart: unless-stopped
+
+  scraper-rodong:
+    build: .
+    image: dprk-learning
+    command: python -m app.scrape --loop --source rodong --no-maintenance --langs ${KCNA_LANGS:-kp,en}
+    depends_on:
+      library:
+        condition: service_started
+    volumes:
+      - ./data:/data
+      - hf-cache:/root/.cache/huggingface
+    environment:
+      - DATA_DIR=/data
+      - KCNA_LANGS=${KCNA_LANGS:-kp,en}
+      - SCRAPE_INTERVAL_MIN=${SCRAPE_INTERVAL_MIN:-60}
+      - REQUEST_DELAY=${REQUEST_DELAY:-2.0}
+      - MAX_ARTICLES_PER_RUN=${MAX_ARTICLES_PER_RUN:-60}
+      - MAX_AGE_HOURS=${MAX_AGE_HOURS:-120}
+      - TRANSLATE_PROVIDER=${TRANSLATE_PROVIDER:-google_free}
+      - TRANSLATE_API_KEY=${TRANSLATE_API_KEY:-}
+      - TRANSLATE_API_URL=${TRANSLATE_API_URL:-}
+      - TRANSLATE_TARGET=${TRANSLATE_TARGET:-EN-US}
+      - TRANSLATE_TIMEOUT=${TRANSLATE_TIMEOUT:-60}
+    restart: unless-stopped
+
+  scraper-vok:
+    build: .
+    image: dprk-learning
+    command: python -m app.scrape --loop --source vok --no-maintenance
+    depends_on:
+      library:
+        condition: service_started
+    volumes:
+      - ./data:/data
+      - hf-cache:/root/.cache/huggingface
+    environment:
+      - DATA_DIR=/data
+      - SCRAPE_INTERVAL_MIN=${SCRAPE_INTERVAL_MIN:-60}
+      - MAX_AGE_HOURS=${MAX_AGE_HOURS:-120}
+      - "VOK_VIDEO_IDS=${VOK_VIDEO_IDS:-ike260528004|명작동화그림책《토끼와 사자》,ike260519016|명작동화그림책《기장나무》,ike260516003|사회주의농촌의 새 모습,ike260516007|건강에 유익한 사과,ike260529002|수도 평양의 원림록화(1)}"
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - VOK_DOWNLOAD_TIMEOUT=${VOK_DOWNLOAD_TIMEOUT:-600}
+      - TRANSLATE_PROVIDER=${TRANSLATE_PROVIDER:-google_free}
+      - TRANSLATE_API_KEY=${TRANSLATE_API_KEY:-}
+      - TRANSLATE_API_URL=${TRANSLATE_API_URL:-}
+      - TRANSLATE_TARGET=${TRANSLATE_TARGET:-EN-US}
+      - TRANSLATE_TIMEOUT=${TRANSLATE_TIMEOUT:-60}
+    restart: unless-stopped
+
+  # Magazines (korean-books.com.kp PDFs). Off by default; set SCRAPE_MAGAZINES=1.
+  # Per-source flags gate it (no --source), so SCRAPE_MAGAZINES=0 => idle.
+  scraper-magazines:
+    build: .
+    image: dprk-learning
+    command: python -m app.scrape --loop --no-maintenance
+    depends_on:
+      library:
+        condition: service_started
+    volumes:
+      - ./data:/data
+    environment:
+      - DATA_DIR=/data
+      - SCRAPE_INTERVAL_MIN=${MAGAZINE_INTERVAL_MIN:-1440}
+      - SCRAPE_KCNA=0
+      - SCRAPE_RODONG=0
+      - SCRAPE_VOK=0
+      - SCRAPE_MAGAZINES=${SCRAPE_MAGAZINES:-0}
+      - "MAGAZINE_ISSUES=${MAGAZINE_ISSUES:-금수강산 2026년 6호|http://www.korean-books.com.kp/KBMbooks/ko/periodic/mountain/20260607151203.pdf}"
+      - MAGAZINE_MAX_PAGES=${MAGAZINE_MAX_PAGES:-80}
+      - TRANSLATE_PROVIDER=${TRANSLATE_PROVIDER:-google_free}
+      - TRANSLATE_API_KEY=${TRANSLATE_API_KEY:-}
+      - TRANSLATE_API_URL=${TRANSLATE_API_URL:-}
+      - TRANSLATE_TARGET=${TRANSLATE_TARGET:-EN-US}
+      - TRANSLATE_TIMEOUT=${TRANSLATE_TIMEOUT:-60}
+    restart: unless-stopped
+
+  # Agriculture / Food Stuffs topical archive + live quantitative analysis.
+  # Scrapes KCNA (kp+en) and Rodong for food/farming articles (no photo gate),
+  # stores them locally, and extracts quantity facts on each pass so the
+  # /agriculture analysis stays current as new articles appear.
+  scraper-agriculture:
+    build: .
+    image: dprk-learning
+    command: python -m app.scrape --loop --source agriculture --no-maintenance --langs ${KCNA_LANGS:-kp,en}
+    depends_on:
+      library:
+        condition: service_started
+    volumes:
+      - ./data:/data
+    environment:
+      - DATA_DIR=/data
+      - KCNA_LANGS=${KCNA_LANGS:-kp,en}
+      - SCRAPE_INTERVAL_MIN=${AGRI_INTERVAL_MIN:-360}
+      - REQUEST_DELAY=${REQUEST_DELAY:-2.0}
+      - MAX_ARTICLES_PER_RUN=${AGRI_MAX_PER_RUN:-120}
+      - MAX_AGE_HOURS=${MAX_AGE_HOURS:-120}
+      - TRANSLATE_PROVIDER=${TRANSLATE_PROVIDER:-google_free}
+      - TRANSLATE_API_KEY=${TRANSLATE_API_KEY:-}
+      - TRANSLATE_API_URL=${TRANSLATE_API_URL:-}
+      - TRANSLATE_TARGET=${TRANSLATE_TARGET:-EN-US}
+      - TRANSLATE_TIMEOUT=${TRANSLATE_TIMEOUT:-60}
+    restart: unless-stopped
+
+volumes:
+  hf-cache:

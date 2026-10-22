@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}농업 · Agriculture/Food Stuffs — Kim Jong Lingo{% endblock %}
+{% block content %}
+  <style>
+    .addurl { display: flex; gap: 8px; margin: 0 0 6px; }
+    .addurl input { flex: 1; font-size: .9rem; padding: 8px 11px; border: 1px solid var(--line); border-radius: 6px; }
+    .addurl button { font-size: .85rem; font-weight: 700; color: #fff; background: #6b46c1; border: none;
+      border-radius: 6px; padding: 8px 16px; cursor: pointer; white-space: nowrap; }
+    .addurl button:hover { background: #553399; }
+    .addurl-err { color: #8a1f1f; font-size: .82rem; margin: 0 0 16px; }
+    .agri-analysis { border: 2px solid var(--ink); background: var(--wash); padding: 16px 18px; margin: 14px 0 24px; }
+    .agri-analysis h2 { margin: 0 0 8px; font-size: 1.05rem; font-weight: 800; color: var(--ink); }
+    .agri-stats { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 6px; font-size: .9rem; }
+    .agri-stats b { color: var(--red); }
+    .agri-totals { display: flex; flex-wrap: wrap; gap: 26px; margin: 14px 0 4px; padding: 12px 0;
+      border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .agri-totals .num { font-size: 1.4rem; font-weight: 800; color: var(--red);
+      font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .agri-totals .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
+    .res-h { font-size: .82rem; font-weight: 800; color: var(--ink); margin: 20px 0 0; text-transform: uppercase; letter-spacing: .03em; }
+    .res-h span { font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--muted); }
+    .res-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .88rem; }
+    .res-table th { text-align: left; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+      color: var(--muted); border-bottom: 1px solid var(--ink); padding: 5px 8px; }
+    .res-table th.r, .res-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
+    .res-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
+    .res-table tr:hover td { background: var(--wash); }
+    .res-table a { color: var(--ink); font-weight: 700; }
+    .res-table a:hover { color: var(--red); }
+    .res-cat { font-size: .68rem; text-transform: uppercase; color: var(--muted); }
+    .mention-tag { font-size: .62rem; font-weight: 700; color: var(--muted); border: 1px solid var(--line);
+      border-radius: 3px; padding: 0 5px; margin-left: 5px; }
+    .derived-tag { font-size: .62rem; font-weight: 700; color: #6b46c1; border: 1px solid #6b46c1;
+      border-radius: 3px; padding: 0 5px; margin-left: 5px; }
+    .ai-star { color: #6b46c1; font-weight: 800; }
+    .agri-note { color: var(--muted); font-size: .76rem; margin: 10px 0 0; }
+    .agri-list { list-style: none; margin: 18px 0 0; padding: 0; }
+    .agri-list li { padding: 9px 0; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 10px; }
+    .agri-src { flex: 0 0 auto; font-size: .66rem; font-weight: 800; text-transform: uppercase; color: #fff;
+      background: var(--ink); border-radius: 3px; padding: 1px 6px; }
+    .agri-src.rodong { background: var(--red); }
+    .agri-title { font-weight: 600; color: var(--ink); }
+    .agri-list a:hover .agri-title { color: var(--red); }
+    .agri-date { flex: 0 0 auto; margin-left: auto; color: var(--muted); font-size: .76rem; font-variant-numeric: tabular-nums; }
+  </style>
+
+  {% macro trange(low, high) -%}
+    {%- if high and high > low -%}{{ "{:,.0f}".format(low) }}–{{ "{:,.0f}".format(high) }}
+    {%- elif low -%}{{ "{:,.0f}".format(low) }}{%- else -%}—{%- endif -%}
+  {%- endmacro %}
+
+  <h1 class="section-h">농업 · Agriculture / Food Stuffs</h1>
+
+  <form method="post" action="/agriculture/add-url" class="addurl">
+    <input type="text" name="url" placeholder="Paste a KCNA or Rodong article URL to scrape, parse & quantify…" autocomplete="off">
+    <button type="submit">Add &amp; quantify</button>
+  </form>
+  {% if add_error %}<p class="addurl-err">⚠ {{ add_error }}</p>{% endif %}
+
+  <section class="agri-analysis">
+    <h2>분석 · Analysis</h2>
+    <div class="agri-stats">
+      <span><b>{{ unique }}</b> articles</span>
+      {% for src, n in by_source.items() %}<span>{{ src|upper }}: <b>{{ n }}</b></span>{% endfor %}
+      {% if date_range %}<span>{{ date_range }}</span>{% endif %}
+    </div>
+
+    <div class="agri-totals">
+      <div>
+        <div class="num">{{ trange(prod_low, prod_high) }}{% if total_has_ai %}<span class="ai-star">*</span>{% endif %}</div>
+        <div class="lbl">tonnes grown (range)</div>
+      </div>
+      <div>
+        <div class="num">{{ resources|length }}</div>
+        <div class="lbl">crops / foods grown</div>
+      </div>
+      <div>
+        <div class="num">{{ "{:,.1f}".format(total_kcal/1e9) if total_kcal else 0 }}B</div>
+        <div class="lbl">consumable kilocalories</div>
+      </div>
+      <div>
+        <div class="num">{{ "{:,.0f}".format(per_capita_day) }}</div>
+        <div class="lbl">consumable kcal / person / day</div>
+      </div>
+    </div>
+
+    <h3 class="res-h">Grown / harvested in the DPRK <span>— drives the production & calorie totals</span></h3>
+    {% if resources %}
+      <table class="res-table">
+        <thead><tr><th>Commodity</th><th class="r">Articles</th><th class="r">Tonnes (range)</th><th class="r">Food kcal</th></tr></thead>
+        <tbody>
+          {% for r in resources %}
+            <tr>
+              <td>
+                <a href="/agriculture/commodity/{{ r.key }}">{{ r.en }}</a>
+                <span class="res-cat">{{ r.cat }}</span>
+                {% if r.ai %}<span class="ai-star" title="includes an AI-estimated volume">*</span>{% endif %}
+                {% if not r.estimable %}<span class="mention-tag">mentioned</span>{% endif %}
+              </td>
+              <td class="r">{{ r.articles }}</td>
+              <td class="r">{{ trange(r.low, r.high) }}</td>
+              <td class="r">{% if r.kcal %}{{ "{:,.0f}".format(r.kcal) }}{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}<p class="agri-note">No grown commodities detected yet.</p>{% endif %}
+
+    {% if processed %}
+      <h3 class="res-h">Processed / manufactured foods <span>— made from the crops above; not re-counted</span></h3>
+      <table class="res-table">
+        <thead><tr><th>Product</th><th class="r">Articles</th><th class="r">Tonnes</th><th class="r">Food kcal</th></tr></thead>
+        <tbody>
+          {% for r in processed %}
+            <tr>
+              <td>
+                <a href="/agriculture/commodity/{{ r.key }}">{{ r.en }}</a>
+                {% if r.derived_only %}<span class="derived-tag" title="derived from a raw crop's end-use">derived</span>{% endif %}
+                {% if r.ai %}<span class="ai-star">*</span>{% endif %}
+                {% if not r.estimable %}<span class="mention-tag">mentioned</span>{% endif %}
+              </td>
+              <td class="r">{{ r.articles }}</td>
+              <td class="r">{{ trange(r.low, r.high) }}</td>
+              <td class="r">{% if r.kcal %}{{ "{:,.0f}".format(r.kcal) }}{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    <p class="agri-note">Each place's repeated reports are reconciled into a range and totals use the
+      <b>low</b> end (conservative); a county's figure supersedes the province containing it (no
+      double-count). <b>Consumable</b> calories count only food eaten directly — seed, spoilage, fodder
+      and processing are excluded; fodder becomes livestock and processing becomes its own product
+      (rice → rice wine, flour, cake …). <span class="ai-star">*</span> marks figures that include an
+      AI-estimated volume. Per-person calories assume {{ "{:,}".format(population) }} people.</p>
+  </section>
+
+  {% if items %}
+    <ul class="agri-list">
+      {% for it in items %}
+        <li>
+          <span class="agri-src {{ it.source }}">{{ it.source }}</span>
+          <a href="/agriculture/{{ it.id }}" title="{{ it.ko_title }}"><span class="agri-title">{{ it.title }}</span></a>
+          {% if it.date %}<span class="agri-date">{{ it.date }}</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}<p class="empty">아직 농업/식량 기사가 없습니다.</p>{% endif %}
+{% endblock %}

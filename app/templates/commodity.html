@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}{{ c.en }} — Agriculture Analysis — Kim Jong Lingo{% endblock %}
+{% block content %}
+  <style>
+    .cm-head { border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 14px; }
+    .cm-head .cat { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .cm-totals { display: flex; flex-wrap: wrap; gap: 26px; margin: 8px 0 18px; }
+    .cm-totals .num { font-size: 1.4rem; font-weight: 800; color: var(--red); font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .cm-totals .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
+    h2.cm-sec { font-size: 1rem; font-weight: 800; margin: 24px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 5px; }
+    table.t { width: 100%; border-collapse: collapse; font-size: .86rem; }
+    table.t th { text-align: left; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border-bottom: 1px solid var(--ink); padding: 5px 8px; }
+    table.t th.r, table.t td.r { text-align: right; font-variant-numeric: tabular-nums; }
+    table.t td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.t a { color: var(--ink); font-weight: 700; } table.t a:hover { color: var(--red); }
+    .use-food { color: #1a7f37; font-weight: 700; }
+    .use-out { color: #6b46c1; font-weight: 700; }
+    .use-excl { color: var(--muted); }
+    .tag { font-size: .62rem; font-weight: 800; border-radius: 3px; padding: 0 5px; margin-left: 4px; }
+    .tag.rules { background: var(--ink); color: #fff; } .tag.ai { background: #6b46c1; color: #fff; }
+    .tag.manual { background: #1a7f37; color: #fff; }
+    .ai-star { color: #6b46c1; font-weight: 800; }
+    .ai-btn { display: inline-block; font-size: .72rem; font-weight: 700; color: #fff; background: #6b46c1;
+      border: none; border-radius: 4px; padding: 4px 9px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+    .ai-btn:hover { background: #553399; color: #fff; }
+    .mini { font-size: .72rem; font-weight: 700; color: var(--ink); background: var(--wash); border: 1px solid var(--line);
+      border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+    .ovr { border: 1px solid var(--line); background: var(--wash); border-radius: 6px; padding: 12px 14px; margin: 6px 0 4px; }
+    .ovr input[type=text], .ovr input[type=number] { font-size: .82rem; padding: 4px 7px; border: 1px solid var(--line);
+      border-radius: 4px; } .ovr input.num { width: 90px; }
+    .note { color: var(--muted); font-size: .78rem; margin: 8px 0 0; }
+    .back { display: inline-block; margin-bottom: 12px; color: var(--muted); font-size: .82rem; }
+  </style>
+
+  {% macro trange(low, high) -%}
+    {%- if high and high > low -%}{{ "{:,.0f}".format(low) }}–{{ "{:,.0f}".format(high) }}
+    {%- elif low -%}{{ "{:,.0f}".format(low) }}{%- else -%}—{%- endif -%}
+  {%- endmacro %}
+
+  <a class="back" href="/agriculture">← 농업 · Agriculture / Food Stuffs</a>
+  <div class="cm-head">
+    <div class="cat">{{ c.cat }}{% if c.kind == "processed" %} · processed food{% else %} · grown in DPRK{% endif %}</div>
+    <h1 class="section-h" style="margin:2px 0 0;">{{ c.en }}{% if total_has_ai %}<span class="ai-star" title="includes an AI-estimated volume">*</span>{% endif %}</h1>
+  </div>
+
+  {% if c.kind == "processed" %}
+    <p class="note" style="border-left:3px solid var(--line);padding-left:10px;">Processed food — its tonnage is
+      tracked but excluded from the calorie total (the calories are counted in the raw crop it's made from).
+      {% if derived_in %}<b>{{ "{:,.0f}".format(derived_in) }} t</b> here is derived from other crops' end-use.{% endif %}</p>
+  {% endif %}
+
+  <div class="cm-totals">
+    <div><div class="num">{% if c.kind == "processed" %}{{ trange(total_low, total_low) }}{% else %}{{ trange(base_low, base_high) }}{% endif %}</div><div class="lbl">tonnes ({{ "produced" if c.kind != "processed" else "incl. derived" }})</div></div>
+    <div><div class="num">{{ "{:,.0f}".format(food_tonnes) }}</div><div class="lbl">tonnes eaten directly</div></div>
+    <div><div class="num">{{ "{:,.0f}".format(kcal) if kcal else 0 }}</div><div class="lbl">consumable kcal</div></div>
+  </div>
+
+  <h2 class="cm-sec">End-use breakdown
+    <a class="ai-btn" style="float:right;font-weight:700;" href="/agriculture/enduse?commodity={{ key }}">📋 Discover end-uses with AI</a></h2>
+  <p class="note" style="margin-top:0;">The split below is the built-in default unless you've discovered
+    a real one. Use the button to have an AI map every DPRK use of {{ c.en|lower }} (recursively into
+    sub-products) and store it.</p>
+  {% if routes %}
+    <table class="t">
+      <thead><tr><th>Use</th><th class="r">Share</th><th class="r">Tonnes (low)</th><th>Becomes</th></tr></thead>
+      <tbody>
+        {% for u in routes %}
+          <tr>
+            <td>{{ u.label }}</td>
+            <td class="r">{{ "{:.0%}".format(u.frac) }}</td>
+            <td class="r">{{ "{:,.0f}".format(u.raw_tonnes) }}</td>
+            <td>
+              {% if u.type == "food" %}<span class="use-food">eaten directly → counts as calories</span>
+              {% elif u.type == "process" and u.product_tonnes is not none %}
+                <span class="use-out">→ {{ "{:,.0f}".format(u.product_tonnes) }} t
+                  <a href="/agriculture/commodity/{{ u.target }}">{{ u.target.replace('_',' ') }}</a></span>
+              {% elif u.type == "feed" and u.product_tonnes is not none %}
+                <span class="use-out">→ {{ "{:,.1f}".format(u.product_tonnes) }} t
+                  <a href="/agriculture/commodity/{{ u.target }}">{{ u.target }}</a> (via feed)</span>
+              {% elif u.type == "seed" %}<span class="use-excl">seed — not consumable</span>
+              {% elif u.type == "loss" %}<span class="use-excl">spoilage / loss — not consumable</span>
+              {% else %}<span class="use-excl">{{ u.type }} — not counted</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="note">Only the <span class="use-food">eaten-directly</span> share becomes this commodity's calories.
+      Processing and feed flow to <span class="use-out">separate products</span> (counted there, never twice).</p>
+  {% endif %}
+
+  <h2 class="cm-sec">Contributing places</h2>
+  <p class="note">Repeated reports for one place are shown as a range; the low end feeds the totals.
+    Re-run “↻ AI” (or re-parse) on any source article to refresh its numbers — the new result
+    <b>replaces</b> the old one. Use “override” to set an authoritative figure by hand.</p>
+  {% if places %}
+    <table class="t">
+      <thead><tr><th>Place</th><th class="r">Tonnes</th><th>Source articles (re-run to update)</th><th class="r">Override</th></tr></thead>
+      <tbody>
+        {% for p in places %}
+          <tr>
+            <td>{{ p.place }}{% if p.level %} <span class="res-cat" style="font-size:.66rem;color:var(--muted);">{{ p.level }}</span>{% endif %}
+              {% for k in p.kinds %}<span class="tag {{ k }}">{{ k }}</span>{% endfor %}</td>
+            <td class="r">{{ trange(p.low, p.high) }}</td>
+            <td>
+              {% for a in p.articles %}
+                <div style="margin-bottom:4px;white-space:nowrap;">
+                  <a href="/agriculture/{{ a.id }}">{{ a.title|truncate(34) }}</a>
+                  <a class="mini" style="text-decoration:none;" href="/agriculture/estimate/manual?commodity={{ key }}&article_id={{ a.id }}" title="Re-run the AI quantification prompt for this article">↻ AI</a>
+                  <form method="post" action="/agriculture/requantify" style="display:inline;margin:0;">
+                    <input type="hidden" name="commodity" value="{{ key }}"><input type="hidden" name="article_id" value="{{ a.id }}">
+                    <button class="mini" type="submit" title="Re-run the offline rules parser">re-parse</button>
+                  </form>
+                </div>
+              {% else %}<span class="note">—</span>{% endfor %}
+            </td>
+            <td class="r">
+              <form method="post" action="/agriculture/override" style="margin:0;display:inline-flex;gap:4px;">
+                <input type="hidden" name="commodity" value="{{ key }}">
+                <input type="hidden" name="place" value="{{ p.place }}">
+                <input class="num" type="number" step="any" name="low" placeholder="low t">
+                <input class="num" type="number" step="any" name="high" placeholder="high t">
+                <button class="mini" type="submit">set</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="note">No quantified observations yet — quantify a mention below.</p>
+  {% endif %}
+
+  <div class="ovr">
+    <form method="post" action="/agriculture/override" style="margin:0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <input type="hidden" name="commodity" value="{{ key }}">
+      <b style="font-size:.84rem;">Manual override:</b>
+      <input type="text" name="place" placeholder="place (optional)">
+      <input class="num" type="number" step="any" name="low" placeholder="low t">
+      <input class="num" type="number" step="any" name="high" placeholder="high t">
+      <button class="ai-btn" type="submit">Save override</button>
+    </form>
+  </div>
+
+  {% if mentions %}
+    <h2 class="cm-sec">Discussed but not quantified</h2>
+    <table class="t">
+      <thead><tr><th>Article</th><th class="r">Times named</th><th class="r">Quantify</th></tr></thead>
+      <tbody>
+        {% for x in mentions %}
+          <tr>
+            <td><a href="/agriculture/{{ x.agri_id }}">{{ x.title }}</a></td>
+            <td class="r">{{ x.count }}</td>
+            <td class="r" style="white-space:nowrap;">
+              <form method="post" action="/agriculture/requantify" style="display:inline;margin:0;">
+                <input type="hidden" name="commodity" value="{{ key }}"><input type="hidden" name="article_id" value="{{ x.agri_id }}">
+                <button class="mini" type="submit" title="Re-run the offline rules parser on this article">Re-parse</button>
+              </form>
+              <a class="ai-btn" href="/agriculture/estimate/manual?commodity={{ key }}&article_id={{ x.agri_id }}">📋 AI prompt</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

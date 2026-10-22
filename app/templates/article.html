@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% set primary = ko or en %}
+{% block title %}{{ primary.title }} · Kim Jong Lingo{% endblock %}
+{% block content %}
+  <p class="back"><a href="/">← 목록으로</a></p>
+
+  <div class="view-toggle" role="group" aria-label="language toggle">
+    <button id="tgl-ko" class="vt on" {{ '' if has_ko else 'disabled' }}>한국어 KR</button>
+    <button id="tgl-en" class="vt on" {{ '' if has_en else 'disabled title="아직 영어 번역이 미러되지 않았습니다"' }}>English EN</button>
+    <span class="hint">버튼으로 언어를 켜고 끄세요 · 단어에 마우스를 올리면 뜻이 나타납니다</span>
+  </div>
+
+  <article class="bilingual" id="article">
+    <header class="art-head">
+      <div class="art-meta">
+        {% for c in categories %}<a class="tag" href="/news?cat={{ c.key }}">{{ c.en }}</a>{% endfor %}
+        {% if primary.date %}<time class="date">{{ primary.date }}</time>{% endif %}
+      </div>
+      {% if ko %}<h1 class="article-main-title ko-only">{{ ko.title }}</h1>{% endif %}
+      {% if en %}<p class="en-title en-only">{{ en.title }}</p>{% endif %}
+      {% if ko and ko.subtitle %}<p class="article-sub-title ko-only">{{ ko.subtitle }}</p>{% endif %}
+      {% if en and en.subtitle %}<p class="en-subtitle en-only">{{ en.subtitle }}</p>{% endif %}
+    </header>
+
+    {% if lead_image %}
+    <figure class="lead-figure"><img src="{{ lead_image.url }}" alt="" loading="lazy"></figure>
+    {% endif %}
+
+    <div class="bi-body">
+      {% if analysis %}
+        {% for para in analysis %}
+          <div class="lp">
+            {% for line in para %}
+              <div class="ll">
+                <div class="ko-line ko-only">{% for w in line.ko_words %}<span class="word {{ 'content' if w.is_content else 'func' }}"{% if w.align %} data-a="{{ w.align|join(',') }}"{% endif %}>{{ w.surface }}<span class="tip"><span class="tip-surface">{{ w.surface }}</span>{% if w.meaning %}<span class="tip-meaning">{{ w.meaning }}</span>{% endif %}{% for m in w.morphemes %}<span class="m"><b>{{ m.form }}</b> <i>{{ m.label }}</i>{% if m.gloss %} — {{ m.gloss }}{% endif %}</span>{% endfor %}</span></span> {% endfor %}</div>
+                {% if line.en_words %}<div class="en-line en-aligned en-only">{% for ew in line.en_words %}<span class="ew" data-i="{{ loop.index0 }}">{{ ew }}</span> {% endfor %}</div>{% elif line.en %}<div class="en-line en-only">{{ line.en }}</div>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      {% elif en %}
+        {# English-only article (no Korean mirrored) #}
+        {% for p in en.paragraphs %}<p class="en-line en-only">{{ p }}</p>{% endfor %}
+      {% endif %}
+    </div>
+
+    {% if bottom_media %}
+    <div class="more-photos">
+      {% for m in bottom_media %}
+        {% if m.kind == 'image' %}<figure><img src="{{ m.url }}" alt="" loading="lazy"></figure>
+        {% else %}<figure><video controls src="{{ m.url }}"></video></figure>{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <p class="source">
+      <span class="source-label">원문 / Original:</span>
+      {% for sx in sources %}<a href="{{ sx.url }}" rel="noreferrer">{{ sx.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
+    </p>
+  </article>
+
+  <script>
+    const art = document.getElementById('article');
+    function bindToggle(btnId, cls) {
+      const b = document.getElementById(btnId);
+      if (!b || b.disabled) return;
+      b.addEventListener('click', () => {
+        const on = b.classList.toggle('on');
+        art.classList.toggle(cls, !on);
+        // don't allow hiding both; if both off, re-enable the other
+      });
+    }
+    bindToggle('tgl-ko', 'hide-ko');
+    bindToggle('tgl-en', 'hide-en');
+
+    // Hovering a Korean word highlights the exact English word(s) it aligns to.
+    document.querySelectorAll('#article .ll').forEach(ll => {
+      ll.querySelectorAll('.ko-line .word[data-a]').forEach(w => {
+        const idxs = w.dataset.a.split(',').filter(x => x !== '');
+        if (!idxs.length) return;
+        const targets = idxs
+          .map(i => ll.querySelector('.en-line .ew[data-i="' + i + '"]'))
+          .filter(Boolean);
+        if (!targets.length) return;
+        w.addEventListener('mouseenter', () => targets.forEach(e => e.classList.add('hl')));
+        w.addEventListener('mouseleave', () => targets.forEach(e => e.classList.remove('hl')));
+      });
+    });
+
+    // Clicking a Korean word opens its grammar card; click it again, click
+    // elsewhere, or press Esc to close. (Hover only does the English highlight.)
+    const words = art.querySelectorAll('.ko-line .word');
+    words.forEach(w => {
+      w.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasOpen = w.classList.contains('open');
+        words.forEach(o => o.classList.remove('open'));
+        if (!wasOpen) w.classList.add('open');
+      });
+    });
+    document.addEventListener('click', () => words.forEach(o => o.classList.remove('open')));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') words.forEach(o => o.classList.remove('open'));
+    });
+  </script>
+{% endblock %}
