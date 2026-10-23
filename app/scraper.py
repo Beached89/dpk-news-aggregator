@@ -21,9 +21,13 @@ from sqlalchemy import select, update, func, or_
 from . import config, translate, topics
 # NOTE: `align` (pulls in torch/transformers) is imported lazily inside the two
 # functions that use it, so importing this module stays cheap for the web app.
+from dataclasses import dataclass, field
+
 from .db import Article, AgriArticle, AgriMention, AgriObservation, Category, Media, init_db, session_scope
 from .kcna_client import KcnaClient
-from .parser import extract_article_links, extract_categories, parse_article, ARTICLE_RE
+from .parser import (ARTICLE_RE, LEGACY_ARTICLE_RE, article_path,
+                     extract_categories, extract_gallery_urls, extract_listing,
+                     extract_photo_urls, parse_article)
 
 log = logging.getLogger("kcna.scraper")
 
@@ -94,24 +98,67 @@ def prune_old() -> int:
 
 
 # ---------------------------------------------------------------- discovery
-def discover(client: KcnaClient, lang: str) -> list[str]:
-    """Collect candidate article hashes from the homepage + article categories."""
-    hashes: dict[str, None] = {}
-    home = client.get_text(f"/{lang}")
-    cat_paths = set(re.findall(rf"/{lang}/category/articles/q/[a-f0-9]+\.kcmsf", home))
-    for lg, h in extract_article_links(home):
-        if lg == lang:
-            hashes[h] = None
-    for cat in sorted(cat_paths):
+@dataclass
+class ListingScan:
+    """Everything one crawl of the homepage + category listings tells us."""
+    catalog: list = field(default_factory=list)      # rows for upsert_categories()
+    hash_cats: dict = field(default_factory=dict)    # article hash -> category keys
+    hash_dates: dict = field(default_factory=dict)   # article hash -> published date
+    hashes: list = field(default_factory=list)       # discovery order, deduped
+
+
+def discover_listing_map(client: KcnaClient, lang: str) -> ListingScan:
+    """Crawl the homepage and each category listing page once.
+
+    Article pages print no publication year ("(평양 10월 20일발 조선중앙통신)"),
+    so the `[2026.10.20.]` stamp beside each link is the only trustworthy source
+    of the year — it is collected here and handed to `parse_article` as
+    `listing_date` when the article itself is fetched.
+    """
+    scan = ListingScan()
+    seen_cats: set[str] = set()
+
+    def harvest(html: str, cat_key: str | None = None) -> None:
+        for item in extract_listing(html):
+            if item.lang != lang:
+                continue
+            if item.hash not in scan.hashes:
+                scan.hashes.append(item.hash)
+            if item.published_date and item.hash not in scan.hash_dates:
+                scan.hash_dates[item.hash] = item.published_date
+            if cat_key:
+                scan.hash_cats.setdefault(item.hash, set()).add(cat_key)
+
+    try:
+        home = client.get_text(f"/{lang}")
+    except Exception as e:
+        log.warning("listing discovery failed: %s", e)
+        return scan
+    harvest(home)
+
+    for path, ko_label in extract_categories(home):
+        if ko_label in CATEGORY_SKIP or path in seen_cats:
+            continue
+        seen_cats.add(path)
+        key, en, sort = _category_meta(ko_label)
+        scan.catalog.append((key, ko_label, en, sort))
         try:
-            page = client.get_text(cat, referer=f"{config.BASE_URL}/{lang}")
-            for lg, h in extract_article_links(page):
-                if lg == lang:
-                    hashes[h] = None
+            page = client.get_text(path, referer=f"{config.BASE_URL}/{lang}")
         except Exception as e:
-            log.warning("category fetch failed %s: %s", cat, e)
+            log.warning("category fetch failed %s: %s", path, e)
+            continue
+        harvest(page, key)
+
+    log.info("[%s] listings: %d categories, %d article hashes (%d dated)",
+             lang, len(scan.catalog), len(scan.hashes), len(scan.hash_dates))
+    return scan
+
+
+def discover(client: KcnaClient, lang: str) -> list[str]:
+    """Collect candidate article hashes from the homepage + category listings."""
+    hashes = discover_listing_map(client, lang).hashes
     log.info("[%s] discovered %d article hashes", lang, len(hashes))
-    return list(hashes)
+    return hashes
 
 
 def _register_discovered(lang: str, hashes: list[str]) -> list[str]:
@@ -122,7 +169,7 @@ def _register_discovered(lang: str, hashes: list[str]) -> list[str]:
             exists = s.scalar(select(Article).where(Article.hash == h, Article.lang == lang))
             if exists:
                 continue
-            s.add(Article(hash=h, lang=lang, url=f"{config.BASE_URL}/{lang}/article/q/{h}.kcmsf",
+            s.add(Article(hash=h, lang=lang, url=f"{config.BASE_URL}{article_path(lang, h)}",
                           status="discovered"))
             new.append(h)
     log.info("[%s] %d newly discovered", lang, len(new))
@@ -152,32 +199,6 @@ def _category_meta(ko_label: str) -> tuple[str, str, int]:
         return CATEGORY_EN[ko_label]
     key = "c" + hashlib.md5(ko_label.encode("utf-8")).hexdigest()[:10]
     return key, ko_label, 99
-
-
-def discover_category_map(client: KcnaClient, lang: str) -> tuple[list, dict[str, set]]:
-    """Returns (catalog, hash->category-keys). Crawls each homepage category
-    listing so every article gets tagged with the categories it appears under."""
-    catalog: list[tuple[str, str, str, int]] = []
-    hash_cats: dict[str, set] = {}
-    try:
-        home = client.get_text(f"/{lang}")
-    except Exception as e:
-        log.warning("category discovery failed: %s", e)
-        return catalog, hash_cats
-    for path, ko_label in extract_categories(home):
-        if ko_label in CATEGORY_SKIP:
-            continue
-        key, en, sort = _category_meta(ko_label)
-        catalog.append((key, ko_label, en, sort))
-        try:
-            page = client.get_text(path, referer=f"{config.BASE_URL}/{lang}")
-        except Exception:
-            continue
-        for lg, h in extract_article_links(page):
-            if lg == lang:
-                hash_cats.setdefault(h, set()).add(key)
-    log.info("[%s] categories: %d, tagged hashes: %d", lang, len(catalog), len(hash_cats))
-    return catalog, hash_cats
 
 
 def upsert_categories(catalog: list) -> None:
@@ -216,39 +237,6 @@ def prune_categories() -> None:
             s.delete(c)
 
 
-# ---------------------------------------------------------------- photos
-# KCNA keeps photos in a separate section; each photo item links back to its
-# article (same headline), so we can attach images to the right article.
-PHOTO_ITEM_RE = re.compile(r"/(?:kp|en|cn|ru|es|jp)/media/photo/q/[a-f0-9]+\.kcmsf")
-IMAGE_RE = re.compile(r"/(?:kp|en|cn|ru|es|jp)/image/q/[a-f0-9]+\.kcmsf")
-
-
-def discover_photo_map(client: KcnaClient, lang: str) -> dict[str, list[str]]:
-    """Map article hash -> list of image URLs, from the photo section."""
-    out: dict[str, list[str]] = {}
-    try:
-        cat = client.get_text(f"/{lang}/category/photos.kcmsf")
-    except Exception as e:
-        log.warning("photo category fetch failed: %s", e)
-        return out
-    items = sorted(set(PHOTO_ITEM_RE.findall(cat)))
-    for item in items:
-        try:
-            html = client.get_text(item, referer=f"{config.BASE_URL}/{lang}/category/photos.kcmsf")
-        except Exception:
-            continue
-        arts = ARTICLE_RE.findall(html)          # (lang, hash) pairs
-        imgs = list(dict.fromkeys(IMAGE_RE.findall(html)))  # dedup, keep order
-        if arts and imgs:
-            art_hash = arts[0][1]
-            out.setdefault(art_hash, [])
-            for u in imgs:
-                if u not in out[art_hash]:
-                    out[art_hash].append(u)
-    log.info("[%s] photo map: %d articles have images", lang, len(out))
-    return out
-
-
 def attach_media(hash_: str, lang: str, image_urls: list[str]) -> int:
     """Attach image Media rows to a fetched article (idempotent)."""
     added = 0
@@ -269,7 +257,7 @@ def attach_media(hash_: str, lang: str, image_urls: list[str]) -> int:
 
 # ---------------------------------------------------------------- articles
 def scrape_article(client: KcnaClient, lang: str, hash_: str) -> bool:
-    path = f"/{lang}/article/q/{hash_}.kcmsf"
+    path = article_path(lang, hash_)
     try:
         html = client.get_text(path, referer=f"{config.BASE_URL}/{lang}")
     except httpx.HTTPStatusError as e:
@@ -347,7 +335,7 @@ def _mark_status(lang: str, hash_: str, status: str, err: str | None = None) -> 
         art = s.scalar(select(Article).where(Article.hash == hash_, Article.lang == lang))
         if art is None:
             art = Article(hash=hash_, lang=lang,
-                          url=f"{config.BASE_URL}/{lang}/article/q/{hash_}.kcmsf")
+                          url=f"{config.BASE_URL}{article_path(lang, hash_)}")
             s.add(art)
         art.status = status
         art.error = (err or "")[:1000]
@@ -442,7 +430,8 @@ def ensure_assets(client: KcnaClient) -> None:
     if dest.exists():
         return
     try:
-        data, _ = client.get_bytes("/assets/img/home/mark.png")
+        # The rebuilt site moved the masthead from /assets/img/home/ to /images/.
+        data, _ = client.get_bytes("/images/logo.png", referer=f"{config.BASE_URL}/kp")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         log.info("saved KCNA logo placeholder (%d bytes)", len(data))
@@ -957,23 +946,6 @@ def _is_fetched(hash_: str, lang: str) -> bool:
             Article.hash == hash_, Article.lang == lang)) == "fetched"
 
 
-def attach_photos(client: KcnaClient, photo_map: dict, langs: list[str]) -> int:
-    """Scrape (if needed) each photo set's article and attach + download images.
-
-    Runs independently of the per-run article limit so photos are never starved
-    by the discovery backlog.
-    """
-    media = 0
-    for art_hash, urls in photo_map.items():
-        if not _is_fetched(art_hash, "kp"):
-            scrape_article(client, "kp", art_hash)          # respects MAX_AGE_HOURS cutoff
-            if "en" in langs and not _is_fetched(art_hash, "en"):
-                scrape_article(client, "en", art_hash)
-        if _is_fetched(art_hash, "kp") and attach_media(art_hash, "kp", urls):
-            media += download_pending_media(client, only_hash=art_hash)
-    return media
-
-
 def run_once(langs: list[str] | None = None, limit: int | None = None,
              sources: set[str] | None = None, maintenance: bool = True) -> dict:
     """Run one scraping pass.
@@ -1045,7 +1017,7 @@ def _store_kcna_ko_row(parsed, h: str) -> None:
             row = Article(hash=h, lang="kp")
             s.add(row)
         row.source = "kcna"
-        row.url = f"{config.BASE_URL}/kp/article/q/{h}.kcmsf"
+        row.url = f"{config.BASE_URL}{article_path('kp', h)}"
         row.title = parsed.title
         row.subtitle = parsed.subtitle
         row.body_text = parsed.body_text
@@ -1057,36 +1029,31 @@ def _store_kcna_ko_row(parsed, h: str) -> None:
         row.scraped_at = datetime.utcnow()
 
 
-# A KCNA article links its photos via <div class="media-icon"><a href="/kp/
-# media/photo/q/<hash>.kcmsf"> (a per-article photo page). That page lists the
-# actual /kp/image/q/<hash>.kcmsf images. So: find the photo-page link, fetch
-# it, and collect the image URLs.
-_PHOTO_PAGE_RE = re.compile(r"/(?:kp|en|cn|ru|es|jp)/media/photo/q/[a-f0-9]+\.kcmsf")
-
-
-def _kcna_photo_urls(client, h: str, html: str, arturl: str, photo_map: dict) -> list[str]:
-    """Resolve a KCNA article's image URLs from its per-article photo page (the
-    .media-icon camera link), plus any inline images and the photo-section map."""
+# An article page carries no <img> of its own: its photos live on a separate
+# gallery page, reached by the camera button
+# `<a class="right_button gallery_button" href="/kp/gallery/detail/<hash>">`,
+# which lists them as `<img src="/photo/<hex>">`.
+def _kcna_photo_urls(client, html: str, referer: str,
+                     max_photos: int | None = None) -> list[str]:
+    """Resolve a KCNA article's image paths: inline /photo/ images first (rare),
+    then every photo on the gallery page behind its camera button."""
+    cap = max_photos or config.KCNA_MAX_PHOTOS
     imgs: list[str] = []
 
     def add(u: str) -> None:
-        if u and u not in imgs:
+        if u and u not in imgs and len(imgs) < cap:
             imgs.append(u)
 
-    # 1) any image URLs inline in the article HTML (rare).
-    for u in IMAGE_RE.findall(html):
+    for u in extract_photo_urls(html):
         add(u)
-    # 2) the per-article photo page(s) linked from the .media-icon camera button.
-    for pp in dict.fromkeys(_PHOTO_PAGE_RE.findall(html)):
+    for gpath in extract_gallery_urls(html):
         try:
-            frag = client.get_text(pp, referer=arturl)
-            for u in IMAGE_RE.findall(frag):
-                add(u)
+            frag = client.get_text(gpath, referer=referer)
         except Exception as e:
-            log.warning("kcna photo page %s failed: %s", pp, e)
-    # 3) the separate photo-section map (best-effort reverse lookup).
-    for u in photo_map.get(h, []):
-        add(u)
+            log.warning("kcna gallery %s failed: %s", gpath, e)
+            continue
+        for u in extract_photo_urls(frag):
+            add(u)
     return imgs
 
 
@@ -1096,11 +1063,10 @@ def _scrape_kcna(client, limit: int, stats: dict) -> None:
     fully complete, one at a time. KCNA's own English is intentionally unused —
     it isn't sentence-aligned to the Korean, which the learning view needs."""
     client.warmup("kp")
-    # Poll: Korean article hashes + categories + the separate photo map.
-    catalog, hash_cats = discover_category_map(client, "kp")
-    upsert_categories(catalog)
-    hashes = discover(client, "kp")
-    photo_map = discover_photo_map(client, "kp")
+    # One crawl of the homepage + every category listing gives hashes, category
+    # tags and (critically) the publication dates the article pages omit.
+    scan = discover_listing_map(client, "kp")
+    upsert_categories(scan.catalog)
 
     # Include reopened (recheck) articles that may have dropped off the listings.
     with session_scope() as s:
@@ -1109,12 +1075,12 @@ def _scrape_kcna(client, limit: int, stats: dict) -> None:
             Article.status == "discovered")).scalars())
 
     order, seen = [], set()
-    for h in list(hashes) + list(hash_cats.keys()) + reopened:
+    for h in list(scan.hashes) + list(scan.hash_cats.keys()) + reopened:
         if h in seen:
             continue
         seen.add(h)
         if _rodong_done(h, "kp", "kcna"):
-            tag_article_categories(h, hash_cats.get(h, set()))
+            tag_article_categories(h, scan.hash_cats.get(h, set()))
             continue
         order.append(h)
     if limit:
@@ -1124,13 +1090,14 @@ def _scrape_kcna(client, limit: int, stats: dict) -> None:
 
     cutoff = _cutoff_date()
     for i, h in enumerate(order, 1):
-        arturl = f"{config.BASE_URL}/kp/article/q/{h}.kcmsf"
+        path = article_path("kp", h)
+        arturl = f"{config.BASE_URL}{path}"
         try:
-            html = client.get_text(f"/kp/article/q/{h}.kcmsf", referer=f"{config.BASE_URL}/kp")
+            html = client.get_text(path, referer=f"{config.BASE_URL}/kp")
         except Exception as e:
             log.warning("kcna [%d/%d] %s — korean fetch failed: %s", i, total, h[:10], e)
             continue
-        art = parse_article(html, "kp", h)
+        art = parse_article(html, "kp", h, listing_date=scan.hash_dates.get(h))
         if art.published_date and art.published_date < cutoff:
             _store_kcna_ko_row(art, h)
             _set_rodong_status(h, "kp", "skipped_old", "kcna")
@@ -1148,14 +1115,18 @@ def _scrape_kcna(client, limit: int, stats: dict) -> None:
             log.info("kcna [%d/%d] %s — off-topic, skipped", i, total, h[:10])
             continue
 
-        # Images: KCNA exposes photos via <a> links / a photo page (not <img>),
-        # so resolve them from the article HTML + the photo-section map.
+        # Images: an article page has none of its own — they sit on the gallery
+        # page behind its camera button. Every /photo/ request needs the article
+        # as Referer or the origin answers 200 with an empty body.
         urls = list(dict.fromkeys(
-            list(art.image_urls) + _kcna_photo_urls(client, h, html, arturl, photo_map)))
+            list(art.image_urls) + _kcna_photo_urls(client, html, arturl)))
         items = []
         for u in urls:
             try:
                 data, ctype = client.get_bytes(u, referer=arturl)
+                if not data:
+                    log.warning("kcna photo %s returned 0 bytes (referer guard?)", u)
+                    continue
                 items.append((data, ctype, u))
             except Exception as e:
                 log.warning("kcna image %s failed: %s", u, e)
@@ -1180,7 +1151,7 @@ def _scrape_kcna(client, limit: int, stats: dict) -> None:
             continue
 
         # Publish: fully complete (Korean + images + English [+ alignment]).
-        tag_article_categories(h, hash_cats.get(h, set()))
+        tag_article_categories(h, scan.hash_cats.get(h, set()))
         _set_rodong_status(h, "kp", "fetched", "kcna")
         stats["kcna_fetched"] += 1
         log.info("kcna [%d/%d] %s — published", i, total, h[:10])
@@ -1534,28 +1505,28 @@ def ingest_url(url: str) -> dict:
     AgriArticle, then extract quantities/mentions. Bypasses the topic filter (the
     user explicitly chose this article). Returns {'id', 'title'} or raises
     ValueError on an unrecognized/unfetchable URL. Works best with KCNA article
-    links (kcna.kp/.../article/q/<hash>.kcmsf); also handles Rodong links."""
+    links (kcna.kp/<lang>/article/detail/<hash>); also handles Rodong links."""
     init_db()
     url = (url or "").strip()
     if not url:
         raise ValueError("Please paste an article URL.")
 
-    m = re.search(r"/(?:kp|en|cn|ru|es|jp)/article/q/([a-f0-9]+)\.kcmsf", url)
+    m = ARTICLE_RE.search(url) or LEGACY_ARTICLE_RE.search(url)
     if m or "kcna" in url.lower():
         if not m:
             raise ValueError("Couldn't find a KCNA article id in that URL.")
-        h = m.group(1)
+        h = m.group("hash")
         with KcnaClient() as client:
             client.warmup("kp")
             art = parse_article(
-                client.get_text(f"/kp/article/q/{h}.kcmsf", referer=f"{config.BASE_URL}/kp"),
+                client.get_text(article_path("kp", h), referer=f"{config.BASE_URL}/kp"),
                 "kp", h)
             if not (art.body_text and art.body_text.strip()):
                 raise ValueError("That KCNA page had no article text.")
             en_title = en_body = None
             try:
                 en = parse_article(
-                    client.get_text(f"/en/article/q/{h}.kcmsf", referer=f"{config.BASE_URL}/en"),
+                    client.get_text(article_path("en", h), referer=f"{config.BASE_URL}/en"),
                     "en", h)
                 en_title, en_body = en.title, en.body_text
                 if _looks_not_found(en_title):
@@ -1572,7 +1543,7 @@ def ingest_url(url: str) -> dict:
             if not (en_body and en_body.strip()):
                 en_body = _mt_body(art.body_text)
             aid = _store_agri("kcna", h, art.title, en_title, art.body_text, en_body,
-                              f"{config.BASE_URL}/kp/article/q/{h}.kcmsf", art.published_date)
+                              f"{config.BASE_URL}{article_path('kp', h)}", art.published_date)
             _extract_agri(aid, art.body_text, en_body or "")
             return {"id": aid, "title": en_title or art.title or h}
 
@@ -1677,7 +1648,7 @@ def scrape_agriculture(limit: int | None = None) -> dict:
             for h in discover(client, "kp"):
                 stats["agri_scanned"] += 1
                 try:
-                    html = client.get_text(f"/kp/article/q/{h}.kcmsf", referer=f"{config.BASE_URL}/kp")
+                    html = client.get_text(article_path("kp", h), referer=f"{config.BASE_URL}/kp")
                 except Exception:
                     continue
                 art = parse_article(html, "kp", h)
@@ -1686,7 +1657,7 @@ def scrape_agriculture(limit: int | None = None) -> dict:
                 en_title = en_body = None
                 try:
                     en = parse_article(
-                        client.get_text(f"/en/article/q/{h}.kcmsf", referer=f"{config.BASE_URL}/en"),
+                        client.get_text(article_path("en", h), referer=f"{config.BASE_URL}/en"),
                         "en", h)
                     en_title, en_body = en.title, en.body_text
                     # Many KP articles have no English edition; KCNA then serves a
@@ -1707,7 +1678,7 @@ def scrape_agriculture(limit: int | None = None) -> dict:
                 if not (en_body and en_body.strip()):
                     en_body = _mt_body(art.body_text)
                 aid = _store_agri("kcna", h, art.title, en_title, art.body_text, en_body,
-                                  f"{config.BASE_URL}/kp/article/q/{h}.kcmsf", art.published_date)
+                                  f"{config.BASE_URL}{article_path('kp', h)}", art.published_date)
                 _extract_agri(aid, art.body_text, en_body or "")
                 stats["agri_kept"] += 1
                 log.info("agri kcna kept %s — %s", h[:10], (en_title or art.title or "")[:48])
