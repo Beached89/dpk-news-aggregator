@@ -514,7 +514,7 @@ def _translate_and_store_en(rid: str, source: str = "rodong") -> int:
     (same-hash) lang='en' row. Translates per Korean sentence and rebuilds the
     English paragraphs to match the Korean structure, so the line-by-line view
     aligns. Returns 1 if a translation was written, 0 if skipped."""
-    from .analysis import _get_kiwi
+    from .analysis import split_korean_sentences
     with session_scope() as s:
         ko = s.scalar(select(Article).where(
             Article.hash == rid, Article.lang == "kp", Article.source == source))
@@ -526,12 +526,11 @@ def _translate_and_store_en(rid: str, source: str = "rodong") -> int:
             return 0  # already translated
         ko_title, ko_body, ko_url, ko_date = ko.title or "", ko.body_text or "", ko.url, ko.published_date
 
-    kiwi = _get_kiwi()
     paras = [p.strip() for p in ko_body.split("\n\n") if p.strip()]
     para_sents = []
     flat: list[str] = []
     for p in paras:
-        sents = [sn.text.strip() for sn in kiwi.split_into_sents(p) if sn.text.strip()] or [p]
+        sents = split_korean_sentences(p) or [p]
         para_sents.append(sents)
         flat.extend(sents)
 
@@ -839,13 +838,13 @@ def scrape_rodong(limit: int) -> dict:
 def backfill_rodong_alignment(max_items: int | None = None) -> int:
     """Compute word alignment for already-translated Rodong articles that don't
     have it yet (reuses the stored English — no re-scrape or re-translate).
-    Pairs KO sentences (kiwi) to EN sentences (regex) per paragraph; only aligns
+    Pairs KO sentences (Kiwi, or the regex fallback) to EN sentences (regex) per
+    paragraph; only aligns
     when the counts match, else stores that paragraph unaligned. Returns count."""
     from . import align          # lazy: loads torch only when actually aligning
     if not align.ensure():
         return 0
-    from .analysis import _get_kiwi, _split_en_sentences
-    kiwi = _get_kiwi()
+    from .analysis import split_korean_sentences, _split_en_sentences
     with session_scope() as s:
         todo = s.execute(select(Article.hash).where(
             Article.source == "rodong", Article.lang == "kp", Article.status == "fetched",
@@ -868,7 +867,7 @@ def backfill_rodong_alignment(max_items: int | None = None) -> int:
         struct = []
         for i, kp in enumerate(ko_paras):
             ep = en_paras[i] if i < len(en_paras) else ""
-            ko_sents = [x.text.strip() for x in kiwi.split_into_sents(kp) if x.text.strip()] or [kp]
+            ko_sents = split_korean_sentences(kp) or [kp]
             en_sents = _split_en_sentences(ep) if ep else []
             para = []
             if en_sents and len(ko_sents) == len(en_sents):
