@@ -68,6 +68,7 @@ pattern would also match `app/data/` and silently drop the bundled glossary.
    VOK and the translation endpoint. If those come back `000`/`403`, the origins are
    refusing datacenter traffic and ingestion has to run from somewhere else — no
    amount of pipeline changes will fix that, so check before anything else.
+   (Already verified on 2026-10-23: all four origins answered — see *Known issues*.)
 2. **Create a Cloudflare Pages project** with *Build advanced* → **Production
    type: Direct upload**, no build command, project name e.g. `dpk-news`. Do not
    connect the repository for auto-builds (see the note in *How it runs*).
@@ -86,7 +87,7 @@ pattern would also match `app/data/` and silently drop the bundled glossary.
    | `R2_ENDPOINT` | variable | `https://<account>.r2.cloudflarestorage.com` |
    | `R2_BUCKET` | variable | bucket name |
    | `TRANSLATE_PROVIDER` | variable | `google_free` (default) / `deepl` / `google` / `libretranslate` |
-   | `SCRAPE_KCNA`, `SCRAPE_RODONG`, `SCRAPE_VOK`, `SCRAPE_MAGAZINES` | variable | `1`/`0` per source |
+   | `SCRAPE_KCNA`, `SCRAPE_RODONG`, `SCRAPE_VOK`, `SCRAPE_MAGAZINES` | variable | `1`/`0` per source. `SCRAPE_KCNA=0` is **set right now** so CI runs on Rodong only (see *Known issues*); delete it to re-enable KCNA once `app/parser.py` speaks the new URL scheme. |
    | `MAX_AGE_HOURS`, `REQUEST_DELAY`, `MAX_ARTICLES_PER_RUN` | variable | pacing and window |
    | `MEDIA_BASE`, `MIRROR_MEDIA` | variable | optional image mirroring |
 
@@ -154,8 +155,9 @@ python -m app.publish --out site && python -m http.server -d site
   `/kp/video/detail/<id>`. Every KCNA pattern in `app/parser.py` (`ARTICLE_RE`,
   `MEDIA_RE`) and `app/scraper.py` (category links, `/kp/category/photos.kcmsf`) matches
   nothing, so a run logs `categories: 0` / `discovered 0 article hashes` / a 404 for the
-  photo category. Upstream change — it breaks local runs exactly the same way. Rodong is
-  unaffected and scrapes normally.
+  photo category. Upstream change — it breaks local runs exactly the same way. Until the
+  parser is updated, the repository variable `SCRAPE_KCNA=0` keeps scheduled runs on
+  Rodong only; Rodong is unaffected and scrapes normally.
 * A green run can still export **0 stories**. `TOPIC_FILTER` keeps only photo articles
   about self-reliance/food/agriculture/industry, so `off-topic, skipped` and
   `no image, skipped` in the log are the filter working as designed, not failures. Check
