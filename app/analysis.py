@@ -8,12 +8,16 @@ POS labels and a curated grammar glossary for particles/endings.
 """
 from __future__ import annotations
 
+import importlib
 import json
+import logging
 import re
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
 from typing import Optional
+
+log = logging.getLogger("kcna.analysis")
 
 # ---- POS tag -> plain-English label (Kiwi/Sejong tagset) ------------------
 POS_LABEL = {
@@ -102,6 +106,53 @@ def _get_kiwi():
                 from kiwipiepy import Kiwi
                 _kiwi = Kiwi()
     return _kiwi
+
+
+_kiwi_usable: bool | None = None
+
+# Sentence terminators, then whitespace, then what plainly starts a sentence.
+# Deliberately conservative: it never splits inside quotes or after a lone digit,
+# so "1,200 tons" and quoted slogans survive intact.
+_KO_SENT_SPLIT = re.compile(
+    r"(?<=[.!?…])\s+(?=[가-힣0-9A-Za-z(（\"'“‘『])"
+)
+
+
+def kiwi_available() -> bool:
+    """Whether the Kiwi tokenizer is importable (cached).
+
+    kiwipiepy ships a ~500 MB wheel. The web app needs it, a minimal scrape
+    install may legitimately omit it, and until recently its absence was fatal:
+    sentence splitting raised ModuleNotFoundError mid-pipeline, every article was
+    held back as "translate failed", and a green run published nothing at all.
+    """
+    global _kiwi_usable
+    if _kiwi_usable is None:
+        try:
+            importlib.import_module("kiwipiepy")
+            _kiwi_usable = True
+        except Exception:
+            _kiwi_usable = False
+    return _kiwi_usable
+
+
+def split_korean_sentences(text: str) -> list[str]:
+    """Split Korean text into sentences: Kiwi when present, regex when not.
+
+    The regex fallback is a little cruder on abbreviations and nested quotes, but
+    it keeps translation and the line-by-line view working, which beats holding
+    the whole article back over a tokenizer.
+    """
+    if not text or not text.strip():
+        return []
+    if kiwi_available():
+        try:
+            return [s.text.strip() for s in _get_kiwi().split_into_sents(text)
+                    if s.text.strip()]
+        except Exception as e:            # broken install, model mismatch, OOM
+            log.warning("kiwi sentence split failed (%s); using regex fallback", e)
+    parts = [p.strip() for p in _KO_SENT_SPLIT.split(text) if p.strip()]
+    return parts or [text.strip()]
 
 
 def _gloss(form: str, tag: str) -> Optional[str]:

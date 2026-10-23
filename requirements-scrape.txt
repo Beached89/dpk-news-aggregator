@@ -1,10 +1,17 @@
 # Everything the scrape -> translate -> export pipeline needs.
 #
 # Kept separate from requirements.txt on purpose: the heavy optional pieces
-# (kiwipiepy ~600 MB model, simalign + torch, faster-whisper, PyMuPDF) are only
-# used by word-level alignment, video subtitling and magazine PDFs. Leaving them
-# out keeps a CI run installing in seconds and removes the most common reasons a
-# scheduled run dies before it publishes anything.
+# (simalign + torch, faster-whisper, PyMuPDF) are only used by word-level
+# alignment, video subtitling and magazine PDFs. Leaving them out keeps a CI run
+# installing in seconds and removes the most common reasons a scheduled run dies
+# before it publishes anything.
+#
+# kiwipiepy is NOT optional any more. Every accepted article is translated one
+# Korean sentence at a time, and the splitter lived only in Kiwi: without it the
+# translate step raised ModuleNotFoundError, each article was held back as
+# "translate failed", and a green run exported an empty site (0 stories from 51
+# candidates). app/analysis.py now falls back to a regex splitter if Kiwi is
+# genuinely absent, but the real fix is to install it here.
 #
 # `deep-translator` is gone: app/translate.py now talks to the keyless endpoint
 # directly with urllib and batches several sentences per request.
@@ -15,3 +22,4 @@ SQLAlchemy==2.0.36
 python-dateutil==2.9.0.post0
 tenacity==9.0.0
 APScheduler==3.10.4
+kiwipiepy==0.18.1

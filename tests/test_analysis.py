@@ -67,3 +67,35 @@ def test_analyze_article_sentence_level_pairing():
 def test_analyze_article_handles_missing_english():
     paras = analyze_article("문단 하나.", None)
     assert paras[0][0]["en"] is None
+
+
+# ---- sentence splitting without Kiwi --------------------------------------
+# The scrape pipeline translates one Korean sentence at a time. When the CI
+# install omitted kiwipiepy the splitter raised ModuleNotFoundError, every
+# article was held back and the run published nothing, so the regex fallback is
+# load-bearing and these cases are deliberately pinned.
+
+def _fallback_only(monkeypatch):
+    from app import analysis
+    monkeypatch.setattr(analysis, "kiwi_available", lambda: False)
+    return analysis
+
+
+def test_split_korean_sentences_without_kiwi(monkeypatch):
+    analysis = _fallback_only(monkeypatch)
+    assert analysis.split_korean_sentences("비가 온다. 바람도 분다. 오늘도 노동한다.") == [
+        "비가 온다.", "바람도 분다.", "오늘도 노동한다."]
+
+
+def test_split_korean_sentences_keeps_decimals_and_thousands(monkeypatch):
+    analysis = _fallback_only(monkeypatch)
+    assert analysis.split_korean_sentences(
+        "생산량이 지난해보다 1,200톤 늘었다. 목표는 확보되었다.") == [
+        "생산량이 지난해보다 1,200톤 늘었다.", "목표는 확보되었다."]
+
+
+def test_split_korean_sentences_single_and_empty(monkeypatch):
+    analysis = _fallback_only(monkeypatch)
+    assert analysis.split_korean_sentences("문장 하나만") == ["문장 하나만"]
+    assert analysis.split_korean_sentences("") == []
+    assert analysis.split_korean_sentences("   ") == []
