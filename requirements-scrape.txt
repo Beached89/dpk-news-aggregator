@@ -1,0 +1,17 @@
+# Everything the scrape -> translate -> export pipeline needs.
+#
+# Kept separate from requirements.txt on purpose: the heavy optional pieces
+# (kiwipiepy ~600 MB model, simalign + torch, faster-whisper, PyMuPDF) are only
+# used by word-level alignment, video subtitling and magazine PDFs. Leaving them
+# out keeps a CI run installing in seconds and removes the most common reasons a
+# scheduled run dies before it publishes anything.
+#
+# `deep-translator` is gone: app/translate.py now talks to the keyless endpoint
+# directly with urllib and batches several sentences per request.
+
+httpx==0.27.2
+selectolax==0.3.21
+SQLAlchemy==2.0.36
+python-dateutil==2.9.0.post0
+tenacity==9.0.0
+APScheduler==3.10.4

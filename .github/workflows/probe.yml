@@ -1,0 +1,43 @@
+# Is the pipeline even able to reach the origins from a datacenter IP? KCNA and
+# Rodong have historically been flaky, and GitHub-hosted runners leave the network
+# through Microsoft Azure ranges, which some state-media hosts refuse. Run this
+# once from the Actions tab before trusting a red "Scrape, translate, publish" run:
+# a 200 here but a failure in the pipeline means something else, a 000/403/timeout
+# here means the runner network is the problem and the scrape has to run elsewhere.
+
+name: Origin reachability probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe origins and the translation endpoint
+        run: |
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          echo "runner egress IP: $(curl -s --max-time 20 https://api.ipify.org || echo unknown)"
+          echo
+          for u in \
+            'http://www.kcna.kp/' \
+            'http://www.rodong.rep.kp/' \
+            'http://www.vok.rep.kp/' \
+            'http://www.korean-books.com.kp/' \
+            'https://translate.googleapis.com/translate_a/t?client=gtx&sl=ko&tl=en&dt=t' \
+            'https://api-free.deepl.com/v2/translate'
+          do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -A "$UA" --max-time 60 "$u" 2>/dev/null || echo FAIL)
+            printf '%-8s %s\n' "$code" "$u"
+          done
+          echo
+          echo 'A real batched translation attempt (proves the keyless provider works from a runner):'
+          curl -s --max-time 60 -A "$UA" \
+            -d 'q=%EC%82%BC%EB%A6%AC%ED%8F%AD%20%EB%91%90%EB%A9%B4%EC%97%90%EC%84%9C' \
+            -d 'q=%EB%82%B4%EC%A3%BC%20%EC%82%B0%EC%86%8C%EB%8A%94' \
+            'https://translate.googleapis.com/translate_a/t?client=gtx&sl=ko&tl=en&dt=t' \
+            | head -c 400 || echo 'request failed'
+          echo

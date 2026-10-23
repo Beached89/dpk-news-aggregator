@@ -10,7 +10,9 @@ APScheduler==3.10.4
 python-dateutil==2.9.0.post0
 tenacity==9.0.0
 kiwipiepy==0.18.1
-deep-translator==1.11.4
+# NOTE: deep-translator was dropped — app/translate.py now batches several
+# sentences per request against the same keyless endpoint using stdlib urllib,
+# which deep-translator cannot do (it sends one sentence per request).
 # Word-level KO<->EN alignment for the learning view (pulls transformers; torch
 # is installed separately as a CPU wheel in the Dockerfile).
 simalign==0.4
