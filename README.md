@@ -51,12 +51,11 @@ Why this shape, and not one long-lived app:
 | `.github/workflows/scrape.yml` | The scheduled pipeline described above |
 | `.github/workflows/probe.yml` | Manual: can a runner reach the origins at all? |
 | `.github/workflows/ci.yml` | Tests + publish smoke test on every push |
-| `requirements-scrape.txt` | Light dependency set used by CI (no torch / kiwipiepy / whisper) |
+| `requirements-scrape.txt` | Dependency set used by CI — **includes `kiwipiepy`**; still no torch / whisper / PyMuPDF |
 | `requirements.txt` | Full local set, including the heavyweight analysis extras |
 | `tests/` | `pytest` suite; `tests/test_translate.py` runs offline |
 | `legacy-docker/`, `docs/`, `PROJECT_CONTEXT.md` | Retired container setup and older notes |
 
-`site/` (generated export), `data/` (SQLite + media) and `.env` are git-ignored.
 `site/` (generated export), `data/` (SQLite + media) and `.env` are git-ignored.
 `/data/` is anchored to the repository root on purpose: an unanchored `data/`
 pattern would also match `app/data/` and silently drop the bundled glossary.
@@ -90,6 +89,13 @@ pattern would also match `app/data/` and silently drop the bundled glossary.
    | `SCRAPE_KCNA`, `SCRAPE_RODONG`, `SCRAPE_VOK`, `SCRAPE_MAGAZINES` | variable | `1`/`0` per source. `SCRAPE_KCNA=0` is **set right now** so CI runs on Rodong only (see *Known issues*); delete it to re-enable KCNA once `app/parser.py` speaks the new URL scheme. |
    | `MAX_AGE_HOURS`, `REQUEST_DELAY`, `MAX_ARTICLES_PER_RUN` | variable | pacing and window |
    | `MEDIA_BASE`, `MIRROR_MEDIA` | variable | optional image mirroring |
+
+   Already set on the repository (2026-10-23): `SCRAPE_KCNA=0`, `SCRAPE_RODONG=1`,
+   `MAX_AGE_HOURS=120`, `REQUEST_DELAY=2.0`, `MAX_ARTICLES_PER_RUN=60`,
+   `TRANSLATE_PROVIDER=google_free`, `TRANSLATE_TARGET=EN-US`. What is left is only the
+   Cloudflare side, which cannot be minted from here — `gh secret list` is empty, so the
+   deploy step skips itself and the export stays in the `site` artifact. Check either with
+   `gh variable list` / `gh secret list`.
 
 5. **Run `Scrape, translate, publish`** manually once, then leave the schedule alone.
    It runs every 6 hours. Until R2 is configured it still works, but each run starts
@@ -158,10 +164,27 @@ python -m app.publish --out site && python -m http.server -d site
   photo category. Upstream change — it breaks local runs exactly the same way. Until the
   parser is updated, the repository variable `SCRAPE_KCNA=0` keeps scheduled runs on
   Rodong only; Rodong is unaffected and scrapes normally.
-* A green run can still export **0 stories**. `TOPIC_FILTER` keeps only photo articles
-  about self-reliance/food/agriculture/industry, so `off-topic, skipped` and
-  `no image, skipped` in the log are the filter working as designed, not failures. Check
-  the `run complete (...)` tally before concluding a run broke.
+* **Zero stories used to be a hidden dependency bug, not the topic filter.** A full-limit
+  run went green while exporting an empty site. Reading the log rather than the badge:
+  10 Rodong articles had cleared the topic and photo filters and were then killed by
+  `No module named 'kiwipiepy'` — the sentence splitter lived only in Kiwi, and
+  `requirements-scrape.txt` excluded Kiwi as a heavy optional extra while the scrape path
+  treated it as mandatory. Held articles stay hidden and are retried forever, so nothing
+  looked wrong. Fixed by installing `kiwipiepy` in the CI set and adding a regex fallback
+  (`app/analysis.py:split_korean_sentences`); the identical run then exported **10 stories,
+  10 translated, 134,054 bytes, `with_photo: 10`**. When a run looks empty, read the
+  `run complete (...)` tally and grep for `held:` — `off-topic, skipped` and
+  `no image, skipped` are `TOPIC_FILTER` working as designed, but `held:` lines are failures.
+* **The published `index.html` does not read the export yet.** `app/publish.py` copies the
+  repository-root `index.html` — a designed static mock with fixed headlines (a few of them
+  invented, e.g. "Source: 38 North") and `href="#"` throughout — and writes `data/*.json`
+  beside it. Nothing in that page fetches them, so a deploy publishes the mock with real
+  JSON unused underneath, on GitHub Pages or Cloudflare Pages alike. The data contract
+  above is stable; the client that consumes it is still to be written. `app/web.py` renders
+  the same data server-side for local viewing, which is why the gap is invisible in
+  development. Media in the export points at remote `http://` origin URLs until
+  `MIRROR_MEDIA=1` and a public R2 bucket are configured, so images will not render on an
+  `https` site before then.
 * **Existing English rows can hold Korean titles.** Exporting the current database
   showed 15 of 19 `lang='en'` rows whose title is identical to the Korean — the
   fallback bug described above, recorded before the fix. Those articles need one more

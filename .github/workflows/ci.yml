@@ -1,6 +1,8 @@
-# Fast checks on every push. Only the test files that need no heavyweight models
-# run here: tests/test_analysis.py exercises the Kiwi tokenizer (kiwipiepy, ~600 MB
-# of models) and is meant to be run locally with the full requirements.txt.
+# Fast checks on every push. Everything now runs against requirements-scrape.txt,
+# the same set the scheduled pipeline installs, because that is exactly where this
+# suite's blind spot was: kiwipiepy was in requirements.txt but not in the CI set,
+# the sentence splitter depended on it, and a green pipeline exported nothing.
+# The whole suite is affordable here now that Kiwi is part of the scrape install.
 
 name: Tests
 
@@ -30,7 +32,7 @@ jobs:
           pip install -r requirements-scrape.txt pytest
 
       - name: Run tests
-        run: pytest tests/test_translate.py tests/test_parser.py -q
+        run: pytest tests -q
 
       - name: Publish smoke test (empty database)
         run: |
