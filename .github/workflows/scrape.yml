@@ -151,8 +151,25 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+      # The `secrets` context is not available inside `if:`, so the presence of the
+      # Pages credentials is detected here and handed to the deploy step as an output.
+      - name: Check Pages deployment configuration
+        if: success()
+        id: pages
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
+        run: |
+          if [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ] && [ -n "$CF_PROJECT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::Cloudflare Pages secrets are not set; the export is still in the 'site' artifact."
+          fi
+
       - name: Deploy to Cloudflare Pages
-        if: ${{ success() && secrets.CLOUDFLARE_API_TOKEN != '' }}
+        if: steps.pages.outputs.ready == 'true'
         uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
