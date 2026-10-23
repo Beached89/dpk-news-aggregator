@@ -168,14 +168,23 @@ jobs:
             echo "::notice title=Deploy skipped::Cloudflare Pages secrets are not set; the export is still in the 'site' artifact."
           fi
 
+      # No cloudflare/* marketplace action is used on purpose: there is no
+      # cloudflare/pages-action (job setup fails with "Unable to resolve action"
+      # before any if: can skip it), and a run step can be skipped cleanly when the
+      # credentials are missing. Node ships with the runner, so wrangler comes from
+      # npx; major version pinned so a future wrangler 5 cannot break the pipeline.
       - name: Deploy to Cloudflare Pages
         if: steps.pages.outputs.ready == 'true'
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
-          directory: site
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          productionBranch: main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PROJECT: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          node --version
+          npx --yes wrangler@4 pages deploy site \
+            --project-name "$CLOUDFLARE_PROJECT" \
+            --branch "${GITHUB_REF_NAME}" \
+            --commit-dirty=true
 
