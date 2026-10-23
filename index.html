@@ -1,10 +1,12 @@
-<!-- Version: 2.0.0 — Kim Jong Lingo DPRK State Media Aesthetic -->
+<!-- Version: 3.0.0 — data-driven front end. Content comes from data/*.json,
+     written by `python -m app.publish` on every CI run; see assets/app.js. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kim Jong Lingo — DPRK Newsroom</title>
+    <meta name="description" content="North Korean state media, machine-translated Korean to English with the Korean original alongside.">
     <!-- Favicon variants -->
     <link rel="icon" type="image/png" sizes="16x16" href="assets/images/favicon-16.png">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
@@ -25,19 +27,14 @@
 
         body {
             font-family: "Inter", sans-serif;
-            background-color: #F5F5F0; /* Warm off-white, like newsprint */
+            background-color: #F5F5F0; /* warm off-white, like newsprint */
             color: var(--dprk-black);
         }
 
-        h1, h2, h3, h4 {
-            font-family: "Noto Serif", serif;
-        }
+        h1, h2, h3, h4 { font-family: "Noto Serif", serif; }
 
-        /* Supreme Leader name typography rule — always 120% size */
-        .leader-name {
-            font-size: 1.2em;
-            font-weight: 900;
-        }
+        /* Korean needs more leading than Latin at the same size */
+        .ko { font-family: "Noto Serif", "Apple SD Gothic Neo", "Malgun Gothic", serif; line-height: 1.85; }
 
         /* Red star bullet point */
         .star-bullet::before {
@@ -48,14 +45,8 @@
             vertical-align: middle;
         }
 
-        /* Red horizontal rule */
-        .red-rule {
-            border: none;
-            height: 2px;
-            background-color: var(--dprk-red);
-        }
+        .red-rule { border: none; height: 2px; background-color: var(--dprk-red); }
 
-        /* Category tag — red badge */
         .cat-tag {
             display: inline-block;
             font-size: 10px;
@@ -67,322 +58,163 @@
             color: white;
         }
 
-        /* Dense list item */
         .news-list-item {
             display: block;
             padding: 10px 0;
             border-bottom: 1px solid #DDD8D0;
             text-decoration: none;
             color: inherit;
+            cursor: pointer;
         }
-        .news-list-item:hover {
-            background-color: rgba(204, 0, 0, 0.03);
+        .news-list-item:hover { background-color: rgba(204, 0, 0, 0.03); }
+
+        /* Top news ticker */
+        .ticker-bar {
+            background: linear-gradient(90deg, var(--dprk-red) 0%, var(--dprk-dark-red) 100%);
+            overflow: hidden;
         }
+        .ticker-content { white-space: nowrap; animation: ticker 45s linear infinite; }
+        @keyframes ticker {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* Language switcher in the header */
+        .lang-switch button {
+            font-size: 11px;
+            padding: 2px 8px;
+            color: rgba(255,255,255,0.75);
+            background: transparent;
+            border: none;
+            border-right: 1px solid rgba(255,255,255,0.3);
+            cursor: pointer;
+        }
+        .lang-switch button:first-child { padding-left: 0; }
+        .lang-switch button:hover { color: white; background: rgba(255,255,255,0.1); }
+        .lang-switch button.active { color: white; font-weight: 700; background: var(--dprk-dark-red); }
+
+        /* Category tabs */
+        .nav-tab {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            background: white;
+            border: 1px solid #DDD8D0;
+            color: #444;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .nav-tab:hover { border-color: var(--dprk-red); color: var(--dprk-red); }
+        .nav-tab.active { background-color: var(--dprk-red); border-color: var(--dprk-red); color: white; }
 
         /* Mobile menu */
         #mobile-menu { display: none; }
         #mobile-menu.open { display: block; }
 
-        /* Mobile responsive text */
         @media (max-width: 640px) {
             .source-text { font-size: 10px !important; }
             h3.mobile-title { font-size: 1.25rem !important; }
             h4.mobile-subtitle { font-size: 0.95rem !important; }
         }
 
-        /* Top News ticker bar */
-        .ticker-bar {
-            background: linear-gradient(90deg, var(--dprk-red) 0%, var(--dprk-dark-red) 100%);
-            overflow: hidden;
-        }
-        .ticker-content {
-            white-space: nowrap;
-            animation: ticker 30s linear infinite;
-        }
-        @keyframes ticker {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
+        /* Reader */
+        .para { margin-bottom: 1rem; text-indent: 1.5em; }
+        .para-ko { color: #333; }
+        .para-en { color: #111; }
+
+        .cover-wrap { background: #EDEAE3; border: 1px solid #DDD8D0; overflow: hidden; }
+        .cover-wrap img { display: block; width: 100%; height: auto; }
+        .cover-none {
+            display: flex; align-items: center; justify-content: center;
+            min-height: 120px; color: #999; font-size: 10px;
+            letter-spacing: 0.1em; text-transform: uppercase;
         }
 
-        /* Card sharp edges — no rounding */
-        .sharp-card {
-            border-radius: 0;
-        }
-
-        /* Language switcher */
-        .lang-switch a {
-            font-size: 11px;
-            padding: 2px 8px;
-            color: rgba(255,255,255,0.7);
-            text-decoration: none;
-            border-right: 1px solid rgba(255,255,255,0.3);
-        }
-        .lang-switch a:first-child { padding-left: 0; }
-        .lang-switch a:hover { color: white; background: rgba(255,255,255,0.1); }
-
-        /* Nav tab active state */
-        .nav-tab.active {
-            background-color: var(--dprk-red);
-            color: white;
-        }
+        [hidden] { display: none !important; }
     </style>
 </head>
 <body class="bg-[#F5F5F0]">
 
-    <!-- Top News Ticker -->
+    <noscript>
+        <div class="max-w-6xl mx-auto px-4 py-6">
+            <p class="text-sm">This page renders <a class="underline" href="data/articles.json">data/articles.json</a>
+            in the browser. Enable JavaScript, or read the JSON export directly.</p>
+        </div>
+    </noscript>
+
+    <!-- Top News Ticker (real headlines, filled from the export) -->
     <div class="ticker-bar py-2 px-4 text-white text-xs font-bold tracking-wide">
         <div class="max-w-6xl mx-auto">
-            <span class="ticker-content">★ TOP NEWS ★ Supreme Leader's Guidance on Agricultural Production Yields Record Harvest ★ New Industrial Complex Completed in Hamgyong Province ★ DPRK Delegation Attends International Economic Forum ★ Youth Construction Corps Completes Housing Project in Pyongyang ★</span>
+            <span id="ticker" class="ticker-content">★ TOP NEWS ★ loading…</span>
         </div>
     </div>
 
     <!-- Header -->
     <header class="bg-white border-b-2 border-[#CC0000] sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-            <!-- Logo + Brand -->
-            <a href="#" class="flex items-center gap-3 no-underline text-inherit">
+            <a href="#/" class="flex items-center gap-3 no-underline text-inherit">
                 <img src="assets/images/header-logo.png" alt="Kim Jong Lingo" class="w-10 h-10 object-contain">
                 <div>
                     <h1 class="text-lg font-black tracking-tight uppercase leading-none" style="font-family: 'Noto Serif', serif; color: var(--dprk-red);">Kim Jong Lingo</h1>
-                    <p class="text-[10px] text-slate-500 tracking-widest uppercase mt-0.5">DPRK Newsroom — 조선중앙통신</p>
+                    <p class="text-[10px] text-slate-500 tracking-widest uppercase mt-0.5">DPRK state media, translated — 조선중앙통신</p>
                 </div>
             </a>
 
-            <!-- Juche Date -->
             <div class="hidden md:block text-right">
-                <span class="text-xs font-bold" style="color: var(--dprk-red);">Juche 115 (2026)</span>
+                <span class="text-xs font-bold" style="color: var(--dprk-red);"><span id="juche-label">Juche</span></span>
                 <br><span class="text-[10px] text-slate-400" id="current-date"></span>
             </div>
 
-            <!-- Mobile Hamburger -->
-            <button id="menu-toggle" class="md:hidden p-2 rounded hover:bg-red-50 touch-manipulation" aria-label="Toggle menu">
+            <button id="menu-toggle" class="md:hidden p-2 rounded hover:bg-red-50 touch-manipulation" aria-label="Toggle menu" aria-expanded="false">
                 <svg class="w-6 h-6 text-[#CC0000]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
         </div>
 
-        <!-- Language Switcher -->
+        <div id="mobile-menu" class="md:hidden border-t border-[#DDD8D0] bg-white">
+            <div id="catnav-mobile" class="px-4 py-3 flex flex-col gap-2"></div>
+        </div>
+
+        <!-- Language + freshness -->
         <div class="bg-[#CC0000] border-t border-[#8B0000]">
             <div class="max-w-6xl mx-auto px-4 py-1 flex items-center justify-between">
-                <nav class="lang-switch flex">
-                    <a href="#">한국어</a>
-                    <a href="#" class="font-bold text-white bg-[#8B0000]">English</a>
-                    <a href="#">中文</a>
-                    <a href="#">Español</a>
-                    <a href="#">日本語</a>
+                <nav class="lang-switch flex" aria-label="Display language">
+                    <button id="lang-en" type="button">English</button>
+                    <button id="lang-ko" type="button">조선어</button>
                 </nav>
                 <div class="hidden md:flex items-center gap-3 text-[10px] text-white/80">
-                    <a href="#" class="hover:text-white">Login</a>
-                    <span>|</span>
-                    <a href="#" class="hover:text-white">Register</a>
+                    <span id="updated">loading…</span>
+                    <a href="https://github.com/Beached89/dpk-news-aggregator" class="hover:text-white" rel="noopener">method</a>
                 </div>
             </div>
         </div>
-
-        <!-- Navigation Tabs -->
-        <nav class="bg-[#F5F0E8] border-t border-[#DDD8D0]">
-            <div class="max-w-6xl mx-auto px-4 flex overflow-x-auto md:overflow-visible">
-                <a href="#" class="nav-tab active text-xs font-bold uppercase tracking-wide py-3 px-3 whitespace-nowrap transition-colors hover:bg-[#CC0000] hover:text-white">★ Top News</a>
-                <a href="#" class="nav-tab text-xs font-bold uppercase tracking-wide py-3 px-3 whitespace-nowrap transition-colors hover:bg-[#CC0000] hover:text-white">Politics</a>
-                <a href="#" class="nav-tab text-xs font-bold uppercase tracking-wide py-3 px-3 whitespace-nowrap transition-colors hover:bg-[#CC0000] hover:text-white">Economy</a>
-                <a href="#" class="nav-tab text-xs font-bold uppercase tracking-wide py-3 px-3 whitespace-nowrap transition-colors hover:bg-[#CC0000] hover:text-white">Military</a>
-                <a href="#" class="nav-tab text-xs font-bold uppercase tracking-wide py-3 px-3 whitespace-nowrap transition-colors hover:bg-[#CC0000] hover:text-white">International</a>
-                <a href="#" class="nav-tab text-xs font-bold uppercase tracking-wide py-3 px-3 whitespace-nowrap transition-colors hover:bg-[#CC0000] hover:text-white">Science</a>
-                <a href="#" class="nav-tab text-xs font-bold uppercase tracking-wide py-3 px-3 whitespace-nowrap transition-colors hover:bg-[#CC0000] hover:text-white">Sports</a>
-                <a href="#" class="nav-tab text-xs font-bold uppercase tracking-wide py-3 px-3 whitespace-nowrap transition-colors hover:bg-[#CC0000] hover:text-white hidden lg:inline">Arts &amp; Culture</a>
-            </div>
-
-            <!-- Mobile Menu -->
-            <div id="mobile-menu" class="md:hidden border-t border-[#DDD8D0] py-2 px-3 space-y-1 bg-[#F5F0E8]">
-                <a href="#" class="block py-2 text-xs font-bold uppercase tracking-wide text-[#CC0000] border-b border-[#DDD8D0]">★ Top News</a>
-                <a href="#" class="block py-2 text-xs font-bold uppercase tracking-wide text-slate-600 border-b border-[#DDD8D0]">Politics</a>
-                <a href="#" class="block py-2 text-xs font-bold uppercase tracking-wide text-slate-600 border-b border-[#DDD8D0]">Economy</a>
-                <a href="#" class="block py-2 text-xs font-bold uppercase tracking-wide text-slate-600 border-b border-[#DDD8D0]">Military</a>
-                <a href="#" class="block py-2 text-xs font-bold uppercase tracking-wide text-slate-600 border-b border-[#DDD8D0]">International</a>
-                <a href="#" class="block py-2 text-xs font-bold uppercase tracking-wide text-slate-600 border-b border-[#DDD8D0]">Science</a>
-                <a href="#" class="block py-2 text-xs font-bold uppercase tracking-wide text-slate-600 border-b border-[#DDD8D0]">Sports</a>
-                <a href="#" class="block py-2 text-xs font-bold uppercase tracking-wide text-slate-600">Arts &amp; Culture</a>
-            </div>
-        </nav>
     </header>
 
-    <main class="max-w-6xl mx-auto px-4 py-6">
+    <!-- Category tabs (from data/categories.json) -->
+    <nav class="max-w-6xl mx-auto px-4 py-3 flex gap-2 overflow-x-auto" id="catnav" aria-label="Categories"></nav>
 
-        <!-- Supreme Leader's Activities — Hero Section -->
-        <section class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-                <h2 class="text-sm font-black uppercase tracking-widest" style="color: var(--dprk-red);">★ Supreme Leader's Activities</h2>
-                <div class="red-rule flex-grow"></div>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-0 border-2 border-[#CC0000] bg-white">
-                <!-- Main Hero -->
-                <div class="lg:col-span-2 p-6">
-                    <span class="cat-tag">Policy Update</span>
-                    <h3 class="text-2xl font-black mt-3 mb-3 leading-tight mobile-title" style="font-family: 'Noto Serif', serif;">
-                        <span class="leader-name" style="color: var(--dprk-red);">Comrade Kim Jong Un</span> Inspects New Agricultural Complex in South Hamgyong Province
-                    </h3>
-                    <p class="text-slate-700 mb-4 leading-relaxed">Summary of the Supreme Leader's guidance on boosting crop yields through modernization of irrigation systems and distribution of new fertilizer supplies. Analysis based on KCNA reports and Rodong Sinmun editorials...</p>
-                    <div class="flex items-center gap-4 text-xs text-slate-500 font-bold uppercase">
-                        <span class="source-text" style="color: var(--dprk-red);">Source: KCNA</span>
-                        <span>|</span>
-                        <span class="source-text">Published: 2026-10-01</span>
-                    </div>
-                </div>
-                <!-- Side Stories -->
-                <div class="divide-y divide-[#DDD8D0]">
-                    <a href="#" class="block p-4 hover:bg-red-50 transition-colors no-underline text-inherit">
-                        <span class="cat-tag" style="background: var(--dprk-dark-red);">Military</span>
-                        <h4 class="font-bold text-sm mt-2 mb-1 mobile-subtitle">KPA Training Exercises in Northern Region</h4>
-                        <p class="text-xs text-slate-600">Brief summary of observed military maneuvers and movements along the western coastal defense line...</p>
-                    </a>
-                    <a href="#" class="block p-4 hover:bg-red-50 transition-colors no-underline text-inherit">
-                        <span class="cat-tag" style="background: var(--dprk-dark-red);">International</span>
-                        <h4 class="font-bold text-sm mt-2 mb-1 mobile-subtitle">UN Security Council Discussion on Sanctions</h4>
-                        <p class="text-xs text-slate-600">Reporting on the latest diplomatic friction regarding trade restrictions and humanitarian exemptions...</p>
-                    </a>
-                    <a href="#" class="block p-4 hover:bg-red-50 transition-colors no-underline text-inherit">
-                        <span class="cat-tag" style="background: var(--dprk-dark-red);">Economy</span>
-                        <h4 class="font-bold text-sm mt-2 mb-1 mobile-subtitle">Market Trends in Sinuiju and Chongjin</h4>
-                        <p class="text-xs text-slate-600">Analysis of local trade dynamics, currency fluctuations, and cross-border commerce developments...</p>
-                    </a>
-                </div>
-            </div>
-        </section>
+    <main class="max-w-6xl mx-auto px-4 pb-4">
+        <div id="status" hidden class="bg-white border-2 border-[#CC0000] p-6 mb-6">
+            <h2 id="status-title" class="text-sm font-black uppercase tracking-widest mb-2" style="color: var(--dprk-red);"></h2>
+            <p id="status-body" class="text-sm text-slate-600"></p>
+        </div>
 
-        <!-- Category: Politics -->
-        <section class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-                <h2 class="text-sm font-black uppercase tracking-widest" style="color: var(--dprk-red);">★ Politics</h2>
-                <div class="red-rule flex-grow"></div>
-            </div>
-            <div class="bg-white border-2 border-[#CC0000] divide-y divide-[#DDD8D0]">
-                <!-- Dense list items -->
-                <a href="#" class="news-list-item no-underline text-inherit">
-                    <span class="cat-tag" style="font-size:9px;">POLITICS</span>
-                    <h4 class="font-bold mt-1 mb-1 mobile-subtitle star-bullet">New Governance Initiative Announced in Pyongyang</h4>
-                    <p class="text-sm text-slate-600 line-clamp-2">A summary of the newly announced administrative changes aimed at improving urban management and local party committee structures...</p>
-                    <div class="mt-1 pt-1 flex justify-between items-center text-[10px] text-slate-500 uppercase font-bold source-text">
-                        <span style="color: var(--dprk-red);">Source: Rodong Sinmun</span>
-                        <span>2 hours ago</span>
-                    </div>
-                </a>
-                <a href="#" class="news-list-item no-underline text-inherit">
-                    <span class="cat-tag" style="font-size:9px;">POLITICS</span>
-                    <h4 class="font-bold mt-1 mb-1 mobile-subtitle star-bullet">Central Committee Session Addresses Economic Planning</h4>
-                    <p class="text-sm text-slate-600 line-clamp-2">Reports from the Workers' Party of Korea on strategic directives for the next five-year production plan...</p>
-                    <div class="mt-1 pt-1 flex justify-between items-center text-[10px] text-slate-500 uppercase font-bold source-text">
-                        <span style="color: var(--dprk-red);">Source: KCNA</span>
-                        <span>6 hours ago</span>
-                    </div>
-                </a>
-                <a href="#" class="news-list-item no-underline text-inherit">
-                    <span class="cat-tag" style="font-size:9px;">POLITICS</span>
-                    <h4 class="font-bold mt-1 mb-1 mobile-subtitle star-bullet">Local Elections See Full Turnout Across All Provinces</h4>
-                    <p class="text-sm text-slate-600 line-clamp-2">Coverage of the nationwide municipal elections with emphasis on participation rates and candidate selection process...</p>
-                    <div class="mt-1 pt-1 flex justify-between items-center text-[10px] text-slate-500 uppercase font-bold source-text">
-                        <span style="color: var(--dprk-red);">Source: Rodong Sinmun</span>
-                        <span>1 day ago</span>
-                    </div>
-                </a>
-            </div>
-        </section>
-
-        <!-- Category: Economy -->
-        <section class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-                <h2 class="text-sm font-black uppercase tracking-widest" style="color: var(--dprk-red);">★ Economy</h2>
-                <div class="red-rule flex-grow"></div>
-            </div>
-            <div class="bg-white border-2 border-[#CC0000] divide-y divide-[#DDD8D0]">
-                <a href="#" class="news-list-item no-underline text-inherit">
-                    <span class="cat-tag" style="font-size:9px;">ECONOMY</span>
-                    <h4 class="font-bold mt-1 mb-1 mobile-subtitle star-bullet">Trade Relations Update with Regional Partners</h4>
-                    <p class="text-sm text-slate-600 line-clamp-2">Detailed summary of NK News' report on the latest trade agreements and sanctions impacts on border commerce...</p>
-                    <div class="mt-1 pt-1 flex justify-between items-center text-[10px] text-slate-500 uppercase font-bold source-text">
-                        <span style="color: var(--dprk-red);">Source: NK News</span>
-                        <span>3 hours ago</span>
-                    </div>
-                </a>
-                <a href="#" class="news-list-item no-underline text-inherit">
-                    <span class="cat-tag" style="font-size:9px;">ECONOMY</span>
-                    <h4 class="font-bold mt-1 mb-1 mobile-subtitle star-bullet">New Industrial Park Opens in Kaesong Special Zone</h4>
-                    <p class="text-sm text-slate-600 line-clamp-2">KCNA coverage of the inauguration ceremony and planned tenant industries for the newly developed economic zone...</p>
-                    <div class="mt-1 pt-1 flex justify-between items-center text-[10px] text-slate-500 uppercase font-bold source-text">
-                        <span style="color: var(--dprk-red);">Source: KCNA</span>
-                        <span>1 day ago</span>
-                    </div>
-                </a>
-            </div>
-        </section>
-
-        <!-- Category: Military -->
-        <section class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-                <h2 class="text-sm font-black uppercase tracking-widest" style="color: var(--dprk-red);">★ Military</h2>
-                <div class="red-rule flex-grow"></div>
-            </div>
-            <div class="bg-white border-2 border-[#CC0000] divide-y divide-[#DDD8D0]">
-                <a href="#" class="news-list-item no-underline text-inherit">
-                    <span class="cat-tag" style="font-size:9px;">MILITARY</span>
-                    <h4 class="font-bold mt-1 mb-1 mobile-subtitle star-bullet">Satellite Analysis of Coastal Defense Sites</h4>
-                    <p class="text-sm text-slate-600 line-clamp-2">Independent analysis from 38 North regarding infrastructure updates on the eastern coast fortifications...</p>
-                    <div class="mt-1 pt-1 flex justify-between items-center text-[10px] text-slate-500 uppercase font-bold source-text">
-                        <span style="color: var(--dprk-red);">Source: 38 North</span>
-                        <span>5 hours ago</span>
-                    </div>
-                </a>
-                <a href="#" class="news-list-item no-underline text-inherit">
-                    <span class="cat-tag" style="font-size:9px;">MILITARY</span>
-                    <h4 class="font-bold mt-1 mb-1 mobile-subtitle star-bullet">KPA Naval Fleet Conducts Live-Fire Drills in Sea of Japan</h4>
-                    <p class="text-sm text-slate-600 line-clamp-2">Rodong Sinmun report on the annual naval exercises involving new torpedo systems and coastal artillery units...</p>
-                    <div class="mt-1 pt-1 flex justify-between items-center text-[10px] text-slate-500 uppercase font-bold source-text">
-                        <span style="color: var(--dprk-red);">Source: Rodong Sinmun</span>
-                        <span>2 days ago</span>
-                    </div>
-                </a>
-            </div>
-        </section>
-
+        <div id="view-list"></div>
+        <div id="view-article" hidden></div>
     </main>
 
     <!-- Footer -->
     <footer class="bg-[#1A1A1A] border-t-4 border-[#CC0000] mt-12 py-8">
         <div class="max-w-6xl mx-auto px-4 text-center">
             <img src="assets/images/header-logo.png" alt="" class="w-8 h-8 mx-auto mb-3 opacity-50 object-contain">
-            <p class="text-slate-400 text-xs mb-1">&copy; 2026 Kim Jong Lingo — DPRK Newsroom</p>
-            <p class="text-slate-600 text-[10px]">조선중앙통신 · Data compiled from KCNA, Rodong Sinmun, NK News, and 38 North</p>
-            <p class="text-slate-700 text-[10px] mt-2">Juche 115 (2026)</p>
+            <p class="text-slate-400 text-xs mb-1">Kim Jong Lingo — machine-translated DPRK state media</p>
+            <p class="text-slate-600 text-[10px]" id="footer-stats">loading…</p>
+            <p class="text-slate-700 text-[10px] mt-2">Translations are automatic and unedited. Check the original before quoting.</p>
         </div>
     </footer>
 
-    <!-- Mobile Menu Toggle Script -->
-    <script>
-        document.getElementById('menu-toggle').addEventListener('click', function() {
-            var menu = document.getElementById('mobile-menu');
-            if (menu.classList.contains('open')) {
-                menu.classList.remove('open');
-            } else {
-                menu.classList.add('open');
-            }
-        });
-
-        // Close mobile menu when clicking outside
-        document.addEventListener('click', function(e) {
-            var menu = document.getElementById('mobile-menu');
-            var toggle = document.getElementById('menu-toggle');
-            if (!menu.contains(e.target) && !toggle.contains(e.target)) {
-                menu.classList.remove('open');
-            }
-        });
-
-        // Set current date in header
-        (function() {
-            var d = new Date();
-            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            var day = d.getDate();
-            var month = months[d.getMonth()];
-            var year = d.getFullYear();
-            document.getElementById('current-date').textContent = month + ' ' + day + ', ' + year;
-        })();
-    </script>
+    <script src="assets/app.js"></script>
 </body>
 </html>
+

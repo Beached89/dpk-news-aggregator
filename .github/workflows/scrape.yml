@@ -1,6 +1,11 @@
 # The pipeline runs entirely off anyone's computer: GitHub Actions is the
-# scheduler and the machine, Cloudflare R2 holds the state (SQLite + translation
-# cache) between runs, Cloudflare Pages serves the static output. All free tier.
+# scheduler and the machine, and the export it writes is published either to
+# GitHub Pages (needs nothing but this workflow) or to Cloudflare (R2 for state
+# and images, Pages for hosting — all free tier).
+#
+# Minimum viable setup: none. With no credentials at all the scrape still runs,
+# publishes from an empty database and the pages job puts the result on
+# https://<user>.github.io/<repo>/ . State then does not persist between runs.
 #
 # Required repository configuration (Settings -> Secrets and variables -> Actions):
 #   secrets:    R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, CLOUDFLARE_API_TOKEN,
@@ -115,10 +120,27 @@ jobs:
 
       - name: Publish static site
         env:
-          MEDIA_BASE: ${{ vars.MEDIA_BASE || '/media' }}
+          # Relative by default: a project Pages site lives under /<repo>/, so an
+          # absolute "/media" path would resolve outside the site. Set MEDIA_BASE to
+          # an R2 URL only when the bucket, MIRROR_MEDIA and a CDN are all wired up.
+          MEDIA_BASE: ${{ vars.MEDIA_BASE || 'media' }}
         run: |
           set -euo pipefail
           python -m app.publish --out site --media-base "$MEDIA_BASE"
+
+      # publish.py exports JSON that points at media/<hash>/<file>; the scraper writes
+      # those bytes to data/media, so they have to be lifted into the deploy directory
+      # or every photo on the site 404s while the JSON still claims it exists.
+      - name: Stage mirrored media into the site
+        run: |
+          set -uo pipefail
+          if [ -d data/media ] && [ -n "$(ls -A data/media 2>/dev/null)" ]; then
+            mkdir -p site/media
+            cp -r data/media/. site/media/
+            echo "staged $(find site/media -type f | wc -l) media files ($(du -sh site/media | cut -f1))"
+          else
+            echo "::notice title=No mirrored media::data/media is empty; the site will show 'image unavailable' in its place."
+          fi
 
       - name: Show what was published
         run: cat site/data/manifest.json
@@ -187,4 +209,50 @@ jobs:
             --project-name "$CLOUDFLARE_PROJECT" \
             --branch "${GITHUB_REF_NAME}" \
             --commit-dirty=true
+
+  # GitHub Pages is the host that needs nothing but this workflow: Pages was set to
+  # "Deploy from a workflow" (gh api -X POST repos/<owner>/<repo>/pages
+  # -f build_type=workflow), so no R2 bucket, no API token and no custom domain are
+  # required for the export to become a public site. The Cloudflare job above stays
+  # as the optional path for someone who wants a domain of their own.
+  #
+  # It deliberately depends on pipeline succeeding: deploying an empty or half-built
+  # directory would replace a working site with an error page.
+  pages:
+    needs: pipeline
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write        # upload-pages-artifact / deploy-pages
+      id-token: write     # OIDC token for the Pages deployment
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Download the site directory
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+
+      - name: Check what is about to go live
+        run: |
+          set -uo pipefail
+          test -f site/index.html || { echo "::error::site/index.html missing"; exit 1; }
+          test -f site/data/articles.json || { echo "::error::no data/articles.json"; exit 1; }
+          echo "stories: $(python3 -c 'import json;print(json.load(open("site/data/articles.json"))["count"])')"
+          echo "media files: $(find site/media -type f 2>/dev/null | wc -l)"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages bundle
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
 
