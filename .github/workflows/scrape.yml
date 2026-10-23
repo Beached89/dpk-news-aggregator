@@ -60,6 +60,10 @@ env:
   R2_BUCKET: ${{ vars.R2_BUCKET }}
   SCRAPE_KCNA: ${{ vars.SCRAPE_KCNA }}
   SCRAPE_RODONG: ${{ vars.SCRAPE_RODONG }}
+  SCRAPE_38NORTH: ${{ vars.SCRAPE_38NORTH }}
+  SCRAPE_DAILYNK: ${{ vars.SCRAPE_DAILYNK }}
+  RSS_MIRROR_FULLTEXT: ${{ vars.RSS_MIRROR_FULLTEXT }}
+  RSS_TRANSLATE_KO: ${{ vars.RSS_TRANSLATE_KO }}
   SCRAPE_VOK: ${{ vars.SCRAPE_VOK }}
   SCRAPE_MAGAZINES: ${{ vars.SCRAPE_MAGAZINES }}
   MAX_AGE_HOURS: ${{ vars.MAX_AGE_HOURS }}
@@ -92,7 +96,7 @@ jobs:
         run: |
           echo "state store : ${R2_BUCKET:+R2 s3://$R2_BUCKET/state}${R2_BUCKET:-none (state will NOT persist)}"
           echo "translate   : $TRANSLATE_PROVIDER -> $TRANSLATE_TARGET (key: $([ -n "$TRANSLATE_API_KEY" ] && echo set || echo unset))"
-          echo "sources     : kcna=${SCRAPE_KCNA:-config} rodong=${SCRAPE_RODONG:-config} vok=${SCRAPE_VOK:-config}"
+          echo "sources     : kcna=${SCRAPE_KCNA:-config} rodong=${SCRAPE_RODONG:-config} vok=${SCRAPE_VOK:-config} 38north=${SCRAPE_38NORTH:-config} dailynk=${SCRAPE_DAILYNK:-config}"
           echo "age window  : ${MAX_AGE_HOURS:-config} hours"
 
       - name: Restore pipeline state from R2

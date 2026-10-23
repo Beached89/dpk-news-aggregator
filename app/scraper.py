@@ -18,7 +18,7 @@ from urllib.parse import urlparse, unquote_to_bytes, urljoin
 import httpx
 from sqlalchemy import select, update, func, or_
 
-from . import config, translate, topics
+from . import config, rssfeed, translate, topics
 # NOTE: `align` (pulls in torch/transformers) is imported lazily inside the two
 # functions that use it, so importing this module stays cheap for the web app.
 from dataclasses import dataclass, field
@@ -946,7 +946,257 @@ def _is_fetched(hash_: str, lang: str) -> bool:
             Article.hash == hash_, Article.lang == lang)) == "fetched"
 
 
+# ------------------------------------------------- external English RSS sources
+def _rss_origin(base_url: str) -> str:
+    """scheme://host for a base URL.
+
+    The client is deliberately built on the origin rather than the section URL:
+    httpx resolves a leading-slash path per RFC 3986, so a client based on
+    ``…/english`` would turn ``/feed/`` into a request for the *Korean* feed at
+    the site root. Origin plus origin-relative path removes that trap.
+    """
+    parsed = urlparse(base_url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _rss_dateline(item, label: str) -> str:
+    """Attribution line, e.g. "Sample Review · A. Reporter".
+
+    Stored in the existing `dateline` column, which the viewer already prints
+    under the headline - these are third-party publications, so the byline and
+    the canonical link (kept in `url`) travel with the story.
+    """
+    return f"{label} · {item.author}" if item.author else label
+
+
+def _rss_fetch_images(client, urls: list[str]) -> list:
+    """Download up to RSS_MAX_IMAGES item images as (bytes, content_type, url).
+
+    A dead or hotlink-refusing asset is logged and skipped: unlike KCNA, where a
+    missing photo means there is nothing to show, these are analytical pieces
+    whose text stands on its own.
+    """
+    out = []
+    for url in urls[:config.RSS_MAX_IMAGES]:
+        try:
+            data, content_type = client.get_bytes(url)
+        except Exception as e:  # noqa: BLE001
+            log.info("rss image skipped (%s): %s", str(e)[:90], url[:90])
+            continue
+        out.append((data, content_type, url))
+    return out
+
+
+def _rss_store_row(item, spec: dict, body: str, status: str = "processing") -> None:
+    """Upsert the English row for one feed item.
+
+    Starts as "processing" and only flips to "fetched" once images and categories
+    are in place, matching the rule the rest of the pipeline follows: nothing
+    reaches the site half-finished.
+    """
+    with session_scope() as s:
+        row = s.scalar(select(Article).where(Article.hash == item.id,
+                                             Article.lang == "en",
+                                             Article.source == spec["key"]))
+        if row is None:
+            row = Article(hash=item.id, lang="en", source=spec["key"])
+            s.add(row)
+        row.source = spec["key"]
+        row.url = item.link
+        row.title = item.title
+        row.body_text = body
+        row.dateline = _rss_dateline(item, spec["label"])
+        row.published_date = item.published
+        row.dedup_key = None
+        row.status = status
+        row.scraped_at = datetime.utcnow()
+
+
+def _rss_tag(item, spec: dict) -> None:
+    """Create/attach categories from the feed's own labels.
+
+    Deliberately not `tag_article_categories()`: that helper attaches tags to the
+    *Korean* row, which these stories do not have unless RSS_TRANSLATE_KO is on,
+    so every tag would be dropped in silence (observed live: 38 North items
+    stored with cats=[]). Attach to whichever rows of this story exist.
+
+    Korean and English labels are the same string here: these sections exist only
+    on English-language outlets, so there is no Korean original to preserve (and
+    Category.label_ko is NOT NULL).
+    """
+    labels = rssfeed.tag_labels(item.categories, item.author,
+                                config.RSS_MAX_CATEGORIES)
+    pairs = rssfeed.category_pairs(labels)
+    wanted = {key for key, _ in pairs if key not in config.HIDDEN_CATEGORY_KEYS}
+    if not wanted:
+        return
+    upsert_categories([(key, label, label, 20 + index)
+                       for index, (key, label) in enumerate(pairs)])
+    with session_scope() as s:
+        rows = s.scalars(select(Article).where(Article.hash == item.id,
+                                               Article.source == spec["key"])).all()
+        if not rows:
+            return
+        cats = s.scalars(select(Category).where(
+            Category.key.in_(list(wanted)))).all()
+        for row in rows:
+            have = {c.key for c in row.categories}
+            for cat in cats:
+                if cat.key not in have:
+                    row.categories.append(cat)
+
+
+def _rss_split_paragraphs(body: str, max_chars: int = 900) -> list[str]:
+    """Body -> translatable chunks, breaking long paragraphs at sentence ends.
+
+    The providers are tuned for sentence-sized input (the KO->EN path sends one
+    sentence per slot); a 4,000-character analytical paragraph is where batched
+    endpoints start merging or truncating, so chunks stay under ~900 characters
+    and are rejoined in order afterwards.
+    """
+    chunks: list[str] = []
+    for paragraph in (body or "").split("\n\n"):
+        paragraph = paragraph.strip()
+        if not paragraph:
+            continue
+        if len(paragraph) <= max_chars:
+            chunks.append(paragraph)
+            continue
+        current = ""
+        for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
+            if current and len(current) + len(sentence) + 1 > max_chars:
+                chunks.append(current)
+                current = sentence
+            else:
+                current = f"{current} {sentence}".strip()
+        if current:
+            chunks.append(current)
+    return chunks
+
+
+def _rss_translate_ko(item, spec: dict, body: str) -> int:
+    """Generate the Korean side of an English story (opt-in: RSS_TRANSLATE_KO).
+
+    The title is translated in the same request as the first chunks, so the
+    Korean view is fully Korean rather than an English headline over Korean text.
+    """
+    chunks = _rss_split_paragraphs(body)
+    if not chunks:
+        return 0
+    wanted = [item.title or ""] + chunks
+    results = translate.translate_to_ko(wanted)
+    title_ko = (results[0] or "").strip() or item.title
+    joined = "\n\n".join(c for c in results[1:] if c and c.strip())
+    if not joined.strip():
+        return 0
+    with session_scope() as s:
+        row = s.scalar(select(Article).where(Article.hash == item.id,
+                                             Article.lang == "kp",
+                                             Article.source == spec["key"]))
+        if row is None:
+            row = Article(hash=item.id, lang="kp", source=spec["key"])
+            s.add(row)
+        row.source = spec["key"]
+        row.url = item.link
+        row.title = title_ko
+        row.body_text = joined
+        row.dateline = _rss_dateline(item, spec["label"])
+        row.published_date = item.published
+        # "fetched", not "processing": publish.py only folds fetched rows, so a
+        # row left in processing would silently contribute no Korean at all.
+        row.status = "fetched"
+        row.scraped_at = datetime.utcnow()
+    return 1
+
+
+def scrape_rss(limit: int, only: set[str] | None = None) -> dict:
+    """Ingest 38 North and Daily NK (English) from their full-text RSS feeds.
+
+    `only` restricts the pass to a subset of source keys (what --source / the
+    per-container SCRAPE_* selection asked for); None means every enabled feed.
+
+    How this differs from the DPRK sources, and why:
+      * no cookie/CSRF/JS dance - the feed carries body, byline, sections and
+        publication time, so one request per source discovers everything;
+      * no topic filter - these outlets exist to cover North Korea, so
+        topics.is_on_topic() (tuned for KCNA's self-reliance beat) would discard
+        nearly every item;
+      * no photo requirement - Daily NK frequently publishes without an image and
+        the viewer renders a "no photo in source" placeholder for that case.
+    """
+    stats = {"rss_fetched": 0, "rss_media": 0, "rss_translated": 0}
+    sources = [spec for spec in config.rss_sources()
+               if only is None or spec["key"] in only]
+    if not sources:
+        return stats
+    cutoff = _cutoff_date()
+
+    for spec in sources:
+        origin = _rss_origin(spec["base"])
+        client = KcnaClient(base_url=origin, timeout=config.RSS_TIMEOUT)
+        try:
+            client.warmup(urlparse(spec["base"]).path.strip("/"))
+            try:
+                payload = client.get_text(spec["feed"], referer=f"{spec['base']}/")
+            except Exception as e:  # noqa: BLE001
+                log.warning("%s: feed fetch failed: %s", spec["key"], e)
+                continue
+            try:
+                items = rssfeed.parse_feed(payload.encode("utf-8"))
+            except Exception as e:  # noqa: BLE001
+                log.warning("%s: feed parse failed: %s", spec["key"], e)
+                continue
+
+            queue = []
+            for item in items:
+                if item.published and item.published < cutoff:
+                    continue                    # outside the rolling window
+                if _rodong_done(item.id, "en", source=spec["key"]):
+                    continue                    # stored or deliberately skipped
+                queue.append(item)
+            if limit:
+                queue = queue[:limit]
+            log.info("%s: %d item(s) in feed, %d to process",
+                     spec["key"], len(items), len(queue))
+
+            for index, item in enumerate(queue, 1):
+                body = item.body_text if config.RSS_MIRROR_FULLTEXT else item.excerpt
+                if not item.title or not (body and body.strip()):
+                    _set_rodong_status(item.id, "en", "skipped_no_text",
+                                       source=spec["key"])
+                    log.info("%s [%d/%d] no usable text, skipped",
+                             spec["key"], index, len(queue))
+                    continue
+
+                _rss_store_row(item, spec, body)
+                stats["rss_media"] += _save_rodong_images(
+                    item.id, "en", _rss_fetch_images(client, item.image_urls),
+                    source=spec["key"])
+                _rss_tag(item, spec)
+
+                if config.RSS_TRANSLATE_KO:
+                    # Best-effort. An article that is complete in its own
+                    # language must not sit hidden because the Korean side of a
+                    # free endpoint is having a bad hour.
+                    try:
+                        stats["rss_translated"] += _rss_translate_ko(item, spec, body)
+                    except Exception as e:  # noqa: BLE001
+                        log.warning("%s [%d/%d] en->ko held for next pass: %s",
+                                    spec["key"], index, len(queue), str(e)[:120])
+
+                _set_rodong_status(item.id, "en", "fetched", source=spec["key"])
+                stats["rss_fetched"] += 1
+                log.info("%s [%d/%d] published %s", spec["key"], index,
+                         len(queue), item.link[:80])
+        finally:
+            client.close()
+
+    log.info("rss: %s", stats)
+    return stats
+
+
 def run_once(langs: list[str] | None = None, limit: int | None = None,
+
              sources: set[str] | None = None, maintenance: bool = True) -> dict:
     """Run one scraping pass.
 
@@ -969,6 +1219,10 @@ def run_once(langs: list[str] | None = None, limit: int | None = None,
             sources.add("vok")
         if config.SCRAPE_MAGAZINES:
             sources.add("magazine")
+        if config.SCRAPE_38NORTH:
+            sources.add("38north")
+        if config.SCRAPE_DAILYNK:
+            sources.add("dailynk")
 
     stats: dict = {"discovered": 0, "fetched": 0, "media": 0}
     if maintenance:
@@ -999,6 +1253,14 @@ def run_once(langs: list[str] | None = None, limit: int | None = None,
             stats.update(scrape_agriculture(limit))
         except Exception as e:
             log.warning("agriculture pass failed: %s", e)
+    if sources & {spec["key"] for spec in config.rss_sources()}:
+        # One pass covers every enabled English feed; scrape_rss re-reads the
+        # config so a container restricted with --source still gets only what it
+        # asked for.
+        try:
+            stats.update(scrape_rss(limit, only=sources))
+        except Exception as e:
+            log.warning("rss pass failed: %s", e)
     if maintenance:
         stats["juche"] = tag_juche()
         backfill_dedup()

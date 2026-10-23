@@ -63,7 +63,9 @@
     rodong: 'Rodong Sinmun',
     kcna: 'KCNA',
     vok: 'Voice of Korea',
-    magazine: 'Magazine'
+    magazine: 'Magazine',
+    '38north': '38 North',
+    dailynk: 'Daily NK'
   };
 
   function sourceLabel(key) {
