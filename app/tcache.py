@@ -103,25 +103,32 @@ class TranslationCache:
 
     # --------------------------------------------------------------- access
     @staticmethod
-    def key(text: str) -> str:
+    def key(text: str, target: str | None = None) -> str:
+        """sha1(provider|target|text).
+
+        ``target`` overrides ``TRANSLATE_TARGET``. The RSS sources translate
+        *English -> Korean* while everything else is Korean -> English, and both
+        directions share one cache file; passing the direction keeps the two
+        populations from being treated as interchangeable entries.
+        """
         prov = config.TRANSLATE_PROVIDER
-        tgt = config.TRANSLATE_TARGET
+        tgt = target or config.TRANSLATE_TARGET
         return hashlib.sha1(f"{prov}|{tgt}|{text}".encode("utf-8")).hexdigest()
 
-    def get(self, text: str) -> Optional[str]:
+    def get(self, text: str, *, target: str | None = None) -> Optional[str]:
         with self._lock:
-            val = self._entries.get(self.key(text))
+            val = self._entries.get(self.key(text, target))
         if val:
             self.hits += 1
         else:
             self.misses += 1
         return val
 
-    def put(self, text: str, translation: str) -> None:
+    def put(self, text: str, translation: str, *, target: str | None = None) -> None:
         if not translation or not translation.strip():
             return                     # never cache an empty/failure result
         with self._lock:
-            k = self.key(text)
+            k = self.key(text, target)
             if self._entries.get(k) == translation:
                 return
             self._entries[k] = translation

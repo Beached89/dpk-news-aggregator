@@ -108,3 +108,77 @@ Servers are slow and flaky (a connection attempt can time out outright) → cap
 concurrency to 1, delay ~2 s between requests, retry with exponential backoff,
 and keep runs resumable via per-article DB statuses so a failure never corrupts
 the mirror.
+
+# External English sources — 38 North & Daily NK (validated live, 2026-10-23)
+
+Both are ordinary hosted WordPress sites, not DPRK infrastructure, and both
+publish **full-text RSS** — so these come in through `app/rssfeed.py` and
+`scrape_rss()` rather than by crawling page markup.
+
+| | 38 North | Daily NK (English) |
+|---|---|---|
+| Feed | `https://www.38north.org/feed/` | `https://www.dailynk.com/english/feed/` |
+| robots.txt | `User-agent: *` / `Disallow:` (nothing) | disallows only `/wp-admin/`, `/?s=`, `/search/` |
+| Feed shape | RSS 2.0, 8 items | RSS 2.0, 10 items |
+| Body | `content:encoded`, 8–24 KB HTML | `content:encoded`, 8–18 KB HTML |
+| Metadata | `dc:creator`, `<category>`, RFC 2822 `pubDate` | same |
+| Item images | 8–10, hotlink fine, **no Referer needed** | 0–2 — many items have none |
+
+## Traps, all reproduced by tests in `tests/test_rssfeed.py`
+
+* **`<figure>` holds the article images.** WordPress wraps every photo in
+  `figure.wp-block-image`, so the pass that extracts *text* (which drops figures
+  and their captions) must not be the pass that extracts *images*. Using the
+  text stripper for both returns a satellite-imagery piece with zero photos —
+  observed live, and now covered by `strip_media_chrome()`.
+* **Hangul asset paths.** Daily NK serves uploads from Korean directory names; a
+  raw IRI dies on ASCII-only sockets ("'ascii' codec can't encode characters"),
+  so `encode_iri()` percent-encodes the path and is idempotent on already-escaped
+  URLs.
+* **Category soup.** Both feeds write categories *and* free post tags into the
+  same `<category>` elements with no `domain` attribute to separate them (checked
+  on both), and reporters get tagged by name — one item carried 15 labels. The
+  leading labels are the editor's sections, so `tag_labels()` keeps those, drops
+  labels that merely repeat the byline, and caps at `RSS_MAX_CATEGORIES`.
+* **httpx base URL + leading slash.** Per RFC 3986 a leading-slash path replaces
+  the base path, so a client based on `…/english` fetching `/feed/` hits the
+  *Korean* feed at the site root. Clients are therefore built on the origin and
+  feed paths are origin-relative (`/english/feed/`).
+* **`tag_article_categories()` targets the Korean row.** English-only stories
+  have none, so tags were dropped in silence; `_rss_tag()` attaches to whichever
+  rows of the story exist.
+* **No photo requirement, no topic filter.** Daily NK often publishes without an
+  image (the viewer shows "no photo in source"), and `topics.is_on_topic()` is
+  tuned for KCNA's self-reliance beat — applying it here would discard nearly
+  every item.
+* **`content:encoded` is a whole page**: scripts, embedded tweets as iframes, ad
+  markup and the trailing "The post … appeared first on …" line are stripped, and
+  paragraph text is joined with blank lines, which is the contract `publish.py`
+  and the viewer's `paraSplit()` expect.
+
+## Identity and translation direction
+
+There is no content hash in these feeds, so `article_id()` derives a stable
+32-hex id from the canonicalised permalink (scheme/host lower-cased, query and
+fragment dropped) — which is what makes re-runs idempotent when WordPress appends
+`?utm_source=rss`.
+
+These articles arrive *in English*, so the generated side is Korean:
+`translate.translate_to_ko()` mirrors `translate_texts()` (cache-first, batched,
+per-line salvage, raises only when nothing works) as its own function so the
+KO→EN hot path is untouched. Cache entries are keyed under the `ko` target —
+`tcache.key()` takes a `target` override — so the two directions cannot be
+confused in the shared cache file. `RSS_TRANSLATE_KO` defaults to **off** (long
+analytical pieces against a keyless endpoint); the viewer renders English-only
+stories correctly because `titleOf()` falls back across languages.
+
+## Rights and attribution
+
+Unlike the DPRK state feeds, these are copyrighted third-party publications. The
+pipeline keeps the canonical URL in `Article.url` and prints
+`"38 North · <byline>"` in the existing `dateline` column, and
+`RSS_MIRROR_FULLTEXT=0` narrows the mirror to each publisher's own
+`<description>` summary with a link out. Full-text mirroring is the default
+because this deployment asks for it; switch it off if the mirror is ever made
+publicly distributed rather than personal.
+

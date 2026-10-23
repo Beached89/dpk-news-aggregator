@@ -356,3 +356,134 @@ def translate_texts(texts: list[str], *, use_cache: bool = True) -> list[str]:
     if failed == len(uniq):
         raise RuntimeError(f"translation failed for all {failed} strings")
     return out
+
+
+# ------------------------------------------------------------ reverse direction
+# 38 North and Daily NK publish *in English*, so for those the machine-generated
+# side is Korean. This is deliberately its own function rather than a flag on
+# translate_texts(): the KO->EN path is what the whole site depends on, and its
+# failure semantics are the opposite of these sources' (a Rodong article stays
+# hidden until English exists; an English article is already complete in its own
+# language and publishes whether or not Korean ever materialises).
+_KO_TARGET = "ko"
+_EN_SOURCE = "en"
+_REVERSE_MAX_BATCH = 12      # these are whole paragraphs, not sentences
+
+
+def reverse_available() -> bool:
+    """Can the configured provider serve EN->KO?"""
+    provider = config.TRANSLATE_PROVIDER
+    if provider == "google_free":
+        return not _blocked["google_free"]        # keyless, any direction
+    if provider == "libretranslate":
+        return bool(config.TRANSLATE_API_URL)     # if the image has a ko model
+    return bool(config.TRANSLATE_API_KEY)
+
+
+def _reverse_batch(texts: list[str]) -> list[str]:
+    """One EN->KO request for a batch of strings, in the configured provider."""
+    provider = config.TRANSLATE_PROVIDER
+    if provider == "google_free":
+        query = urllib.parse.urlencode({"client": "gtx", "sl": _EN_SOURCE,
+                                        "tl": _KO_TARGET, "dt": "t"})
+        raw = _post_form(f"{_G_BATCH}?{query}", [("q", t) for t in texts])
+        out = _parse_payload(raw, len(texts))
+        if len(out) != len(texts):
+            raise RuntimeError(f"{len(out)} results for {len(texts)} inputs")
+        return out
+    import httpx
+    if provider == "deepl":
+        headers = {"Authorization": f"DeepL-Auth-Key {config.TRANSLATE_API_KEY}"}
+        data = [("source_lang", "EN"), ("target_lang", "KO")]
+        data += [("text", t) for t in texts]
+        r = httpx.post(_deepl_url(), data=data, headers=headers,
+                       timeout=config.TRANSLATE_TIMEOUT)
+        r.raise_for_status()
+        return [t["text"] for t in r.json()["translations"]]
+    if provider == "libretranslate":
+        url = config.TRANSLATE_API_URL or "http://localhost:5000/translate"
+        payload = {"q": texts, "source": _EN_SOURCE, "target": _KO_TARGET,
+                   "format": "text"}
+        if config.TRANSLATE_API_KEY:
+            payload["api_key"] = config.TRANSLATE_API_KEY
+        r = httpx.post(url, json=payload, timeout=config.TRANSLATE_TIMEOUT)
+        r.raise_for_status()
+        translated = r.json()["translatedText"]
+        return [translated] if isinstance(translated, str) else list(translated)
+    # "google" (Cloud Translation) and any other key-authenticated endpoint.
+    url = config.TRANSLATE_API_URL or (
+        "https://translation.googleapis.com/language/translate/v2")
+    r = httpx.post(url, params={"key": config.TRANSLATE_API_KEY},
+                   json={"q": texts, "source": _EN_SOURCE, "target": _KO_TARGET,
+                         "format": "text"}, timeout=config.TRANSLATE_TIMEOUT)
+    r.raise_for_status()
+    return [t["translatedText"] for t in r.json()["data"]["translations"]]
+
+
+def translate_to_ko(texts: list[str], *, use_cache: bool = True) -> list[str]:
+    """English strings -> Korean, order preserved 1:1 with the input.
+
+    Mirrors translate_texts(): cache-first (under the ``ko`` target so entries
+    can't be mistaken for KO->EN ones), de-duplicated, batched, "" where a string
+    could not be translated, and a raise only when nothing at all came through -
+    which is the caller's cue to publish English-only and retry on the next run.
+    """
+    if not texts:
+        return []
+    if not reverse_available():
+        raise RuntimeError(
+            f"{config.TRANSLATE_PROVIDER} cannot do EN->KO without "
+            f"TRANSLATE_API_KEY/TRANSLATE_API_URL")
+
+    cache = tcache.get_cache() if use_cache else None
+    out: list[str] = list(texts)
+    need: dict[str, list[int]] = {}
+    for i, text in enumerate(texts):
+        if not text.strip():
+            continue
+        hit = cache.get(text, target=_KO_TARGET) if cache is not None else None
+        if hit:
+            out[i] = hit
+        else:
+            need.setdefault(text, []).append(i)
+    if not need:
+        log.info("en->ko: %d strings, all served from cache", len(texts))
+        return out
+
+    uniq = list(need)
+    failed = 0
+    for start in range(0, len(uniq), _REVERSE_MAX_BATCH):
+        batch = uniq[start:start + _REVERSE_MAX_BATCH]
+        try:
+            results = _reverse_batch(batch)
+            if len(results) != len(batch):
+                raise RuntimeError(f"{len(results)} results for {len(batch)} inputs")
+        except Exception as e:  # noqa: BLE001
+            log.warning("en->ko batch of %d failed (%s); retrying per line",
+                        len(batch), str(e)[:120])
+            results = []
+            for text in batch:
+                try:
+                    results.append(_reverse_batch([text])[0])
+                except Exception as line_error:  # noqa: BLE001
+                    results.append(None)
+                    log.warning("en->ko: line failed (%s)", str(line_error)[:90])
+                time.sleep(0.3)                  # gentle on the keyless endpoint
+        for source_text, korean in zip(batch, results):
+            if korean and korean.strip():
+                if cache is not None:
+                    cache.put(source_text, korean, target=_KO_TARGET)
+                for pos in need[source_text]:
+                    out[pos] = korean
+            else:
+                failed += 1
+                for pos in need[source_text]:
+                    out[pos] = ""
+
+    if cache is not None:
+        cache.flush()
+    if failed:
+        log.warning("en->ko: %d/%d distinct strings untranslated", failed, len(uniq))
+    if failed == len(uniq):
+        raise RuntimeError(f"en->ko failed for all {failed} strings")
+    return out

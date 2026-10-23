@@ -1,6 +1,7 @@
 # DPRK News Aggregator
 
-A DPRK-only news reader: KCNA / Rodong / VOK / magazine ingestion, Korean → English
+A DPRK-only news reader: KCNA / Rodong / VOK / magazine ingestion plus English
+coverage from 38 North and Daily NK (full-text RSS), Korean → English
 self-translation, word-level alignment for language learning, and an agriculture
 quantity analysis. The front end is a static page; **nothing of this runs on your
 computer or on a server you pay for.**
@@ -48,8 +49,9 @@ Why this shape, and not one long-lived app:
 | Path | Purpose |
 |---|---|
 | `index.html`, `assets/app.js` | Static front end: fetches `data/*.json` and renders it (no build step, no framework) |
-| `app/scrape.py`, `app/scraper.py` | CLI and ingestion for kcna / rodong / vok / magazine / agriculture |
-| `app/translate.py` | KO→EN client: batched keyless Google endpoint, DeepL, Google Cloud, LibreTranslate |
+| `app/scrape.py`, `app/scraper.py` | CLI and ingestion for kcna / rodong / vok / magazine / agriculture / 38north / dailynk |
+| `app/rssfeed.py` | Full-text RSS ingestion for the English sources (38 North, Daily NK): parsing, image and byline extraction, category trimming |
+| `app/translate.py` | KO→EN client: batched keyless Google endpoint, DeepL, Google Cloud, LibreTranslate — plus `translate_to_ko()` for the English-native sources |
 | `app/tcache.py` | Persistent translation cache — the reason the free tiers are enough |
 | `app/publish.py` | SQLite → static JSON export (**stdlib only**, no heavy imports) |
 | `app/analysis.py`, `app/align.py`, `app/agri_*` | Morphology, KO↔EN alignment, agriculture analysis |
@@ -101,6 +103,8 @@ needs secrets and a bucket.
    | `R2_BUCKET` | variable | bucket name |
    | `TRANSLATE_PROVIDER` | variable | `google_free` (default) / `deepl` / `google` / `libretranslate` |
    | `SCRAPE_KCNA`, `SCRAPE_RODONG`, `SCRAPE_VOK`, `SCRAPE_MAGAZINES` | variable | `1`/`0` per source. Both KCNA and Rodong are live; delete a variable to fall back to the config default. |
+   | `SCRAPE_38NORTH`, `SCRAPE_DAILYNK` | variable | `1`/`0` for the English RSS sources. Both default **on**; they need no secrets and cost one request per source. |
+   | `RSS_MIRROR_FULLTEXT`, `RSS_TRANSLATE_KO`, `RSS_MAX_IMAGES`, `RSS_MAX_CATEGORIES` | variable | Full article body vs. the publisher's own summary (default: full); generate the Korean side of English stories (default: off); per-item photo and tag caps. |
    | `MAX_AGE_HOURS`, `REQUEST_DELAY`, `MAX_ARTICLES_PER_RUN` | variable | pacing and window |
    | `MEDIA_BASE`, `MIRROR_MEDIA` | variable | optional image mirroring. Both empty (the default) is correct for GitHub Pages: media is staged into `site/media/` and referenced by a relative path. Pointing `MEDIA_BASE` at an `http://` R2 URL reintroduces mixed content on an `https` site. |
 

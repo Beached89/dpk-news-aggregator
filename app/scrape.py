@@ -33,7 +33,8 @@ def main() -> None:
     p.add_argument("--interval", type=int, default=config.SCRAPE_INTERVAL_MIN,
                    help="minutes between runs in --loop mode")
     p.add_argument("--source", action="append",
-                   choices=["kcna", "rodong", "vok", "magazine", "agriculture"],
+                   choices=["kcna", "rodong", "vok", "magazine", "agriculture",
+                            "38north", "dailynk"],
                    help="scrape only this source (repeatable); default = SCRAPE_* config flags")
     p.add_argument("--maintenance", dest="maintenance", action="store_true", default=None,
                    help="run cross-source upkeep (prune/juche/dedup) — exactly one container should")

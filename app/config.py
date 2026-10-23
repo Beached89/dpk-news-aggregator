@@ -53,6 +53,48 @@ RODONG_TIMEOUT = _float("RODONG_TIMEOUT", 60)
 # mirror so one photo-heavy event doesn't dominate a scheduled run.
 KCNA_MAX_PHOTOS = _int("KCNA_MAX_PHOTOS", 12)
 
+# --- External English-language sources (RSS) --------------------------------
+# 38 North and Daily NK English publish full article text over WordPress RSS, so
+# these are ingested from the feed rather than by crawling markup. Both sites'
+# robots.txt allow the feed path. They are also *copyrighted third-party
+# publications* (unlike the DPRK state feeds): each story keeps its canonical
+# URL and byline, and RSS_MIRROR_FULLTEXT=0 narrows the mirror to the publisher's
+# own summary plus a link out.
+NORTH38_BASE_URL = _env("NORTH38_BASE_URL", "https://www.38north.org").rstrip("/")
+NORTH38_FEED_PATH = _env("NORTH38_FEED_PATH", "/feed/")
+DAILYNK_BASE_URL = _env("DAILYNK_BASE_URL", "https://www.dailynk.com/english").rstrip("/")
+DAILYNK_FEED_PATH = _env("DAILYNK_FEED_PATH", "/english/feed/")
+SCRAPE_38NORTH = _bool("SCRAPE_38NORTH", True)
+SCRAPE_DAILYNK = _bool("SCRAPE_DAILYNK", True)
+# Feed + asset timeout. These origins are ordinary hosted sites, so unlike
+# RODONG_TIMEOUT they need no allowance for a slow state-run server.
+RSS_TIMEOUT = _float("RSS_TIMEOUT", 45)
+# Cap mirrored photos per feed item (38 North satellite pieces run 8-10 images).
+RSS_MAX_IMAGES = _int("RSS_MAX_IMAGES", 8)
+# WordPress lumps editor-chosen categories in with free post tags, so cap how
+# many become nav entries per story (0 = no cap).
+RSS_MAX_CATEGORIES = _int("RSS_MAX_CATEGORIES", 5)
+# Mirror the full article body from content:encoded. Set to 0 to store only the
+# publisher's own <description> summary and let the card link out.
+RSS_MIRROR_FULLTEXT = _bool("RSS_MIRROR_FULLTEXT", True)
+# These stories arrive *in English*. The site is bilingual, so this option
+# generates the Korean side (EN->KO) instead of showing English-only articles.
+# Off by default: it is the expensive part (long analytical pieces, keyless
+# endpoint) and the viewer renders English-only stories fine.
+RSS_TRANSLATE_KO = _bool("RSS_TRANSLATE_KO", False)
+
+
+def rss_sources() -> list[dict]:
+    """Enabled RSS sources, in scrape order."""
+    catalog = [
+        {"key": "38north", "label": "38 North", "base": NORTH38_BASE_URL,
+         "feed": NORTH38_FEED_PATH, "enabled": SCRAPE_38NORTH},
+        {"key": "dailynk", "label": "Daily NK", "base": DAILYNK_BASE_URL,
+         "feed": DAILYNK_FEED_PATH, "enabled": SCRAPE_DAILYNK},
+    ]
+    return [s for s in catalog if s["enabled"]]
+
+
 # VOK videos to subtitle (no auto-discovery yet — a curated seed list of video
 # IDs from /index.php/detail_com/vi_video/<id>). Comma-separated. Each entry may
 # optionally carry the Korean title as "id|한국어제목" (the detail page is
