@@ -5,17 +5,21 @@ self-translation, word-level alignment for language learning, and an agriculture
 quantity analysis. The front end is a static page; **nothing of this runs on your
 computer or on a server you pay for.**
 
+Live site: <https://beached89.github.io/dpk-news-aggregator/> — published by the
+pipeline on every successful run, with no cloud credentials configured.
+
 ## How it runs
 
 ```
-GitHub Actions (cron, free)                 Cloudflare (free)
-┌───────────────────────────────────┐       ┌──────────────────────────┐
-│ 1. pull state   kcna.db           │──R2──▶│  state: kcna.db          │
-│                 translations.json │       │          translations.json│
-│ 2. python -m app.scrape --once    │       └──────────────────────────┘
+GitHub Actions (cron, free)                    where it lands
+┌───────────────────────────────────┐       ┌────────────────────────────────┐
+│ 1. pull state   kcna.db           │──R2──▶│ state: kcna.db                 │
+│                 translations.json │       │        translations.json       │
+│ 2. python -m app.scrape --once    │       └────────────────────────────────┘
 │      scrape + translate + analyse │
-│ 3. python -m app.publish --out site       index.html + data/*.json  ──▶ Pages
-│ 4. deploy site/ via wrangler      │           (public site)
+│ 3. python -m app.publish --out site   site/ = index.html + assets/ + data/
+│ 4. stage data/media into site/    │──────▶ GitHub Pages   (no secrets at all)
+│ 5. optional wrangler deploy       │──────▶ Cloudflare Pages (own domain)
 └───────────────────────────────────┘
 ```
 
@@ -27,20 +31,23 @@ Why this shape, and not one long-lived app:
   dozen slow DPRK pages. The ingestion half therefore cannot be moved into the edge.
 * **Pages is static-only**, so the FastAPI app (`app/web.py`) is not what the public
   sees. Each run writes the same information out as JSON (`app/publish.py`) and the
-  browser renders it.
+  browser renders it (`index.html` + `assets/app.js`, no framework, no build step).
 * **Scheduled GitHub Actions is the only free general-purpose computer available
   here**, so it is the scheduler, the scraper and the translator. Public repositories
   get unlimited Actions minutes; the state that normally lives on a disk is kept in
-  Cloudflare R2 (10 GB free, no egress charges) and re-attached each run.
-* Pages git-integration builds are deliberately **not** used: the build output has to
-  be `site/`, and building from the repository root would publish `app/*.py` to the
-  public internet. `app/publish.py` copies in only `index.html` and `assets/`.
+  Cloudflare R2 (10 GB free, no egress charges) and re-attached each run. Skipping R2
+  entirely still works — every run then starts from an empty database.
+* Git-integration *builds* are deliberately **not** used on either host: GitHub Pages is
+  configured as "Deploy from a workflow" and Cloudflare as direct upload, because a build
+  run from the repository root would publish `app/*.py` to the public internet.
+  `app/publish.py` copies in only `index.html` and `assets/`; the workflow stages
+  `data/media/` into `site/media/` so the photos the JSON refers to are actually deployed.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
-| `index.html`, `assets/` | Cloudflare Pages front end (no build step) |
+| `index.html`, `assets/app.js` | Static front end: fetches `data/*.json` and renders it (no build step, no framework) |
 | `app/scrape.py`, `app/scraper.py` | CLI and ingestion for kcna / rodong / vok / magazine / agriculture |
 | `app/translate.py` | KO→EN client: batched keyless Google endpoint, DeepL, Google Cloud, LibreTranslate |
 | `app/tcache.py` | Persistent translation cache — the reason the free tiers are enough |
@@ -68,6 +75,13 @@ pattern would also match `app/data/` and silently drop the bundled glossary.
    refusing datacenter traffic and ingestion has to run from somewhere else — no
    amount of pipeline changes will fix that, so check before anything else.
    (Already verified on 2026-10-23: all four origins answered — see *Known issues*.)
+**Option A — GitHub Pages: nothing to configure.** Pages is enabled on this repository
+with *Deploy from a workflow*, and the `pages` job at the end of `scrape.yml` publishes
+`site/` after every successful pipeline. Skip steps 2–4 and go to step 5.
+
+**Option B — Cloudflare Pages: only if you want your own domain.** This is the path that
+needs secrets and a bucket.
+
 2. **Create a Cloudflare Pages project** with *Build advanced* → **Production
    type: Direct upload**, no build command, project name e.g. `dpk-news`. Do not
    connect the repository for auto-builds (see the note in *How it runs*).
@@ -88,18 +102,21 @@ pattern would also match `app/data/` and silently drop the bundled glossary.
    | `TRANSLATE_PROVIDER` | variable | `google_free` (default) / `deepl` / `google` / `libretranslate` |
    | `SCRAPE_KCNA`, `SCRAPE_RODONG`, `SCRAPE_VOK`, `SCRAPE_MAGAZINES` | variable | `1`/`0` per source. `SCRAPE_KCNA=0` is **set right now** so CI runs on Rodong only (see *Known issues*); delete it to re-enable KCNA once `app/parser.py` speaks the new URL scheme. |
    | `MAX_AGE_HOURS`, `REQUEST_DELAY`, `MAX_ARTICLES_PER_RUN` | variable | pacing and window |
-   | `MEDIA_BASE`, `MIRROR_MEDIA` | variable | optional image mirroring |
+   | `MEDIA_BASE`, `MIRROR_MEDIA` | variable | optional image mirroring. Both empty (the default) is correct for GitHub Pages: media is staged into `site/media/` and referenced by a relative path. Pointing `MEDIA_BASE` at an `http://` R2 URL reintroduces mixed content on an `https` site. |
 
    Already set on the repository (2026-10-23): `SCRAPE_KCNA=0`, `SCRAPE_RODONG=1`,
    `MAX_AGE_HOURS=120`, `REQUEST_DELAY=2.0`, `MAX_ARTICLES_PER_RUN=60`,
-   `TRANSLATE_PROVIDER=google_free`, `TRANSLATE_TARGET=EN-US`. What is left is only the
-   Cloudflare side, which cannot be minted from here — `gh secret list` is empty, so the
-   deploy step skips itself and the export stays in the `site` artifact. Check either with
-   `gh variable list` / `gh secret list`.
+   `TRANSLATE_PROVIDER=google_free`, `TRANSLATE_TARGET=EN-US`. Pages itself is enabled
+   (`gh api repos/<owner>/<repo>/pages` reports `build_type: workflow`,
+   `https://<user>.github.io/<repo>/`), which is why the site goes public without any
+   secret. `gh secret list` is still empty — that only skips the optional Cloudflare job.
+   Check either with `gh variable list` / `gh secret list`.
 
 5. **Run `Scrape, translate, publish`** manually once, then leave the schedule alone.
-   It runs every 6 hours. Until R2 is configured it still works, but each run starts
-   from an empty database and the site artifact is only in the Actions run.
+   It runs every 6 hours. On `main` the `pages` job then deploys the result; on a branch
+   it stops at the `site` artifact. Until R2 is configured each run starts from an empty
+   database, so the site shows the last 120 hours (`MAX_AGE_HOURS`) of whatever the run
+   managed to fetch.
 
 ## Translation
 
@@ -126,10 +143,16 @@ learner reads as English; `TRANSLATE_KEEP_SOURCE_ON_FAIL=1` restores that.
 | File | Contents |
 |---|---|
 | `/data/manifest.json` | `generated_at`, `schema`, counts, `sources`, `media_local` |
-| `/data/articles.json` | stories newest-first: titles KO/EN, date, categories, `cover`, `snippet`, `has_translation`, `group` |
-| `/data/a/<hash>.json` | one story: full `body_ko`, `body_en`, parsed `align` (KO/EN per sentence + word pairs), media |
+| `/data/articles.json` | the card list, newest-first: `id`, `date`, `sources`, `title_ko`, `title_en`, `dateline`, `categories`, `cover`, `videos`, `snippet`, `has_translation`, `has_alignment`, `group` — deliberately compact, **no url and no body text** |
+| `/data/a/<hash>.json` | one story: `url`, full `body_ko`, `body_en`, parsed `align` (KO/EN per sentence + word pairs), `media`, `subtitle`, `dedup_key` |
 | `/data/categories.json` | nav with per-category counts, hidden categories removed |
 | `/data/agri.json` | agriculture facts, place observations, commodity and end-use tables |
+| `/media/<hash>/<file>` | mirrored images, staged by the workflow from `data/media` (the export only references them) |
+
+`assets/app.js` therefore makes two kinds of request: one `articles.json` for the list,
+then `a/<hash>.json` per story it opens. Because `articles.json` carries no `url`, the
+reader merges the detail record over the card before it renders the "open the original"
+link — that merge is load-bearing, not decoration.
 
 A `hash` is one article (Korean on the `kp` row, English on the `en` row of the same
 hash); `group` lists the hashes of the same report from different sources, so the
@@ -150,6 +173,11 @@ python -m app.publish --out site && python -m http.server -d site
 `DATA_DIR` selects where the SQLite database and media live; it defaults to `./data`.
 `python -m app.publish --help` lists the export options (`--max-age-hours`,
 `--limit`, `--media-base`, `--no-static`).
+
+Serve the directory rather than opening the file: the page reads its data over HTTP, so
+`index.html` opened straight from disk shows the *Could not load the export* notice.
+`python -m http.server -d site` and visit `http://localhost:8000`. To preview media the
+way the workflow does, copy `data/media` to `site/media` first.
 
 ## Known issues and caveats
 
@@ -175,16 +203,26 @@ python -m app.publish --out site && python -m http.server -d site
   10 translated, 134,054 bytes, `with_photo: 10`**. When a run looks empty, read the
   `run complete (...)` tally and grep for `held:` — `off-topic, skipped` and
   `no image, skipped` are `TOPIC_FILTER` working as designed, but `held:` lines are failures.
-* **The published `index.html` does not read the export yet.** `app/publish.py` copies the
-  repository-root `index.html` — a designed static mock with fixed headlines (a few of them
-  invented, e.g. "Source: 38 North") and `href="#"` throughout — and writes `data/*.json`
-  beside it. Nothing in that page fetches them, so a deploy publishes the mock with real
-  JSON unused underneath, on GitHub Pages or Cloudflare Pages alike. The data contract
-  above is stable; the client that consumes it is still to be written. `app/web.py` renders
-  the same data server-side for local viewing, which is why the gap is invisible in
-  development. Media in the export points at remote `http://` origin URLs until
-  `MIRROR_MEDIA=1` and a public R2 bucket are configured, so images will not render on an
-  `https` site before then.
+* **The published page used to be a mock; it now reads the export.** The old `index.html`
+  shipped designed-but-fixed headlines (some invented, e.g. "Source: 38 North") with
+  `href="#"` throughout while `data/*.json` sat underneath unused, because `app/web.py`
+  renders the same data server-side and hid the gap in development. `assets/app.js` is now
+  that client: story list, per-story reader, English / 조선말 / 한-EN-together modes (with a
+  stacked fallback when the two languages do not break into the same number of paragraphs),
+  category tabs built from `categories.json`, and relative URLs throughout so the same
+  directory works at a domain root or under `/dpk-news-aggregator/`. Scraped text reaches the
+  DOM only through `textContent` — it is never re-parsed as markup.
+* **Photos needed a step nobody had written.** The export references
+  `media/<hash>/00_img.jpg`, but the scraper stores those bytes in `data/media` and nothing
+  copied them into `site/`, so every image 404'd while `manifest.json` still reported
+  `with_photo: 10`. The workflow now stages `site/media/` before uploading, and `MEDIA_BASE`
+  defaults to the relative `media` — the previous `/media` default would have resolved above
+  a project Pages site even with the files present. A missing image degrades to an
+  "image unavailable" box instead of a broken icon.
+* **The page keeps its looks from a CDN.** `index.html` pulls Tailwind and Noto Serif from
+  `cdn.tailwindcss.com` / Google Fonts, the way the mock did. The data path does not need
+  them — rendering was verified with those hosts blocked — but without access to them the
+  site is unstyled text. Vendoring them locally is the first thing to do if that matters.
 * **Existing English rows can hold Korean titles.** Exporting the current database
   showed 15 of 19 `lang='en'` rows whose title is identical to the Korean — the
   fallback bug described above, recorded before the fix. Those articles need one more
