@@ -1101,6 +1101,8 @@ def _scrape_kcna(client, limit: int, stats: dict) -> None:
         if art.published_date and art.published_date < cutoff:
             _store_kcna_ko_row(art, h)
             _set_rodong_status(h, "kp", "skipped_old", "kcna")
+            log.info("kcna [%d/%d] %s — older than the window (%s), skipped",
+                     i, total, h[:10], art.published_date)
             continue
         if not (art.body_text and art.body_text.strip()):
             _store_kcna_ko_row(art, h)
@@ -1133,7 +1135,8 @@ def _scrape_kcna(client, limit: int, stats: dict) -> None:
         stats["kcna_media"] += _save_rodong_images(h, "kp", items, source="kcna")
         if not _article_has_image(h, "kp", "kcna"):
             _set_rodong_status(h, "kp", "skipped_no_image", "kcna")
-            log.info("kcna [%d/%d] %s — no image, skipped", i, total, h[:10])
+            log.info("kcna [%d/%d] %s — no image (gallery=%s, %d photo candidate(s)), skipped",
+                     i, total, h[:10], bool(art.gallery_url), len(urls))
             continue
 
         # Translation + alignment (required before publishing).
