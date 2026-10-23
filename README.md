@@ -100,13 +100,15 @@ needs secrets and a bucket.
    | `R2_ENDPOINT` | variable | `https://<account>.r2.cloudflarestorage.com` |
    | `R2_BUCKET` | variable | bucket name |
    | `TRANSLATE_PROVIDER` | variable | `google_free` (default) / `deepl` / `google` / `libretranslate` |
-   | `SCRAPE_KCNA`, `SCRAPE_RODONG`, `SCRAPE_VOK`, `SCRAPE_MAGAZINES` | variable | `1`/`0` per source. `SCRAPE_KCNA=0` is **set right now** so CI runs on Rodong only (see *Known issues*); delete it to re-enable KCNA once `app/parser.py` speaks the new URL scheme. |
+   | `SCRAPE_KCNA`, `SCRAPE_RODONG`, `SCRAPE_VOK`, `SCRAPE_MAGAZINES` | variable | `1`/`0` per source. Both KCNA and Rodong are live; delete a variable to fall back to the config default. |
    | `MAX_AGE_HOURS`, `REQUEST_DELAY`, `MAX_ARTICLES_PER_RUN` | variable | pacing and window |
    | `MEDIA_BASE`, `MIRROR_MEDIA` | variable | optional image mirroring. Both empty (the default) is correct for GitHub Pages: media is staged into `site/media/` and referenced by a relative path. Pointing `MEDIA_BASE` at an `http://` R2 URL reintroduces mixed content on an `https` site. |
 
-   Already set on the repository (2026-10-23): `SCRAPE_KCNA=0`, `SCRAPE_RODONG=1`,
+   Already set on the repository (2026-10-23): `SCRAPE_RODONG=1`,
    `MAX_AGE_HOURS=120`, `REQUEST_DELAY=2.0`, `MAX_ARTICLES_PER_RUN=60`,
-   `TRANSLATE_PROVIDER=google_free`, `TRANSLATE_TARGET=EN-US`. Pages itself is enabled
+   `TRANSLATE_PROVIDER=google_free`, `TRANSLATE_TARGET=EN-US`. The old
+   `SCRAPE_KCNA=0` variable has been deleted, so KCNA runs again with the rebuilt
+   parser. Pages itself is enabled
    (`gh api repos/<owner>/<repo>/pages` reports `build_type: workflow`,
    `https://<user>.github.io/<repo>/`), which is why the site goes public without any
    secret. `gh secret list` is still empty — that only skips the optional Cloudflare job.
@@ -181,17 +183,18 @@ way the workflow does, copy `data/media` to `site/media` first.
 
 ## Known issues and caveats
 
-* **KCNA currently produces nothing.** The site has been rebuilt and no longer uses the
-  `.kcmsf` URL scheme this scraper was written against. `http://www.kcna.kp/kp` answers
-  `200` with a real 1.19 MB page (`조선중앙통신 | 첫페지`) that contains **zero** `.kcmsf`
-  links; articles now live at `/kp/article/detail/<id>`, category listings at
-  `/kp/article/list/<id>`, photo galleries at `/kp/gallery/list/<id>` and video at
-  `/kp/video/detail/<id>`. Every KCNA pattern in `app/parser.py` (`ARTICLE_RE`,
-  `MEDIA_RE`) and `app/scraper.py` (category links, `/kp/category/photos.kcmsf`) matches
-  nothing, so a run logs `categories: 0` / `discovered 0 article hashes` / a 404 for the
-  photo category. Upstream change — it breaks local runs exactly the same way. Until the
-  parser is updated, the repository variable `SCRAPE_KCNA=0` keeps scheduled runs on
-  Rodong only; Rodong is unaffected and scrapes normally.
+* **KCNA was rebuilt in 2026 — the scraper now speaks the new site.** Routes moved off
+  `.kcmsf`: articles are `/{lang}/article/detail/<32 hex>`, categories
+  `/article/list/<32 hex>`, photo galleries `/gallery/detail/<32 hex>`, video
+  `/video/detail/<32 hex>` with the files at `/video/stream/<hex>`, and every image is
+  `/photo/<hex>`. Two quirks of the rebuild are load-bearing in the code: an article page
+  prints **no publication year** (the dateline is "(평양 10월 20일발 조선중앙통신)"), so the
+  year comes from the `[2026.10.20.]` stamp beside the link on the homepage or listing and
+  is passed to `parse_article(..., listing_date=...)`; and `/photo/…` answers **200 with an
+  empty body** unless the request carries a kcna.kp `Referer`, so photo downloads always
+  send the article URL as referer. Listing pages paginate through a CSRF-protected `POST`,
+  which is not implemented — the first page of each category plus the homepage already
+  covers a rolling 5-day window.
 * **Zero stories used to be a hidden dependency bug, not the topic filter.** A full-limit
   run went green while exporting an empty site. Reading the log rather than the badge:
   10 Rodong articles had cleared the topic and photo filters and were then killed by

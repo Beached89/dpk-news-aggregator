@@ -5,13 +5,13 @@ from app.parser import parse_article, _parse_en_date, _extract_dateline
 from app.analysis import analyze_word, analyze_article
 
 EN_HTML = """
-<html><body class="en">
-  <div class="article-main-title">Comrade Xi Jinping Leaves Pyongyang</div>
-  <div class="article-sub-title">Kim Jong Un Warmly Sees Him Off</div>
-  <div class="article-content-body"><div class="content-wrapper">
+<html><body lang="en-us">
+  <main><article><div class="container">
+    <h1 class="text-center text-danger">Comrade Xi Jinping Leaves Pyongyang</h1>
+    <h1 class="text-center text-danger">Kim Jong Un Warmly Sees Him Off</h1>
     <p>Pyongyang, June 10 (KCNA) -- Comrade Xi Jinping left here in the afternoon.</p>
     <p>He was seen off at the airport.</p>
-  </div></div>
+  </div></article></main>
 </body></html>
 """
 

@@ -49,6 +49,9 @@ SCRAPE_RODONG = _bool("SCRAPE_RODONG", True)
 SCRAPE_VOK = _bool("SCRAPE_VOK", False)
 # Rodong pages are large/slow; give them a longer timeout.
 RODONG_TIMEOUT = _float("RODONG_TIMEOUT", 60)
+# A KCNA gallery can run to a dozen-plus photos per story; cap how many we
+# mirror so one photo-heavy event doesn't dominate a scheduled run.
+KCNA_MAX_PHOTOS = _int("KCNA_MAX_PHOTOS", 12)
 
 # VOK videos to subtitle (no auto-discovery yet — a curated seed list of video
 # IDs from /index.php/detail_com/vi_video/<id>). Comma-separated. Each entry may
