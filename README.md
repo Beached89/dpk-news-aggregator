@@ -146,12 +146,29 @@ python -m app.publish --out site && python -m http.server -d site
 
 ## Known issues and caveats
 
+* **KCNA currently produces nothing.** The site has been rebuilt and no longer uses the
+  `.kcmsf` URL scheme this scraper was written against. `http://www.kcna.kp/kp` answers
+  `200` with a real 1.19 MB page (`조선중앙통신 | 첫페지`) that contains **zero** `.kcmsf`
+  links; articles now live at `/kp/article/detail/<id>`, category listings at
+  `/kp/article/list/<id>`, photo galleries at `/kp/gallery/list/<id>` and video at
+  `/kp/video/detail/<id>`. Every KCNA pattern in `app/parser.py` (`ARTICLE_RE`,
+  `MEDIA_RE`) and `app/scraper.py` (category links, `/kp/category/photos.kcmsf`) matches
+  nothing, so a run logs `categories: 0` / `discovered 0 article hashes` / a 404 for the
+  photo category. Upstream change — it breaks local runs exactly the same way. Rodong is
+  unaffected and scrapes normally.
+* A green run can still export **0 stories**. `TOPIC_FILTER` keeps only photo articles
+  about self-reliance/food/agriculture/industry, so `off-topic, skipped` and
+  `no image, skipped` in the log are the filter working as designed, not failures. Check
+  the `run complete (...)` tally before concluding a run broke.
 * **Existing English rows can hold Korean titles.** Exporting the current database
   showed 15 of 19 `lang='en'` rows whose title is identical to the Korean — the
   fallback bug described above, recorded before the fix. Those articles need one more
   translation pass (re-run the scraper while they are inside `MAX_AGE_HOURS`, or
   re-ingest them) to get real English.
-* Runner reachability for the DPRK origins is **not yet verified**; run `probe.yml`.
+* Runner reachability **is verified**: from `ubuntu-latest` (Azure `westus3`/`centralus`)
+  a probe run got `200` from `kcna.kp`, `vok.rep.kp` and `korean-books.com.kp`, `302` from
+  `rodong.rep.kp`, and a real batched keyless translation came back
+  (`삼리폭 두면에서` -> `On two sides of Samripok`). Datacenter IPs are not blocked.
 * GitHub Actions cron for free accounts is best-effort and can start late; use
   `workflow_dispatch` when you want it now.
 * The keyless endpoint is not a sanctioned API and DeepL/Google terms restrict some
