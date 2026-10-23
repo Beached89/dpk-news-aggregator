@@ -22,6 +22,10 @@ node_modules/
 .wrangler/
 dist/
 
+# --- Generated static site (Cloudflare Pages output) ------------------------
+# Built by `python -m app.publish`; never commit it, it is rebuilt by CI.
+/site/
+
 # --- Editor / OS noise ------------------------------------------------------
 .DS_Store
 Thumbs.db
