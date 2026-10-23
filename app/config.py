@@ -5,21 +5,42 @@ import os
 from pathlib import Path
 
 
+def _env(name: str, default: str) -> str:
+    """Value of an environment variable, where unset *and blank* both mean "use default".
+
+    GitHub Actions expands an unconfigured repository variable to an empty string
+    instead of leaving it unset (`${{ vars.REQUEST_DELAY }}` -> ""), and a `KEY=`
+    line in .env behaves the same way. os.environ.get(name, default) then hands back
+    "", which used to raise ValueError on float("") at import time and silently
+    turned every SCRAPE_* switch off.
+    """
+    raw = os.environ.get(name)
+    return default if raw is None or not raw.strip() else raw.strip()
+
+
 def _bool(name: str, default: bool) -> bool:
-    return os.environ.get(name, str(default)).lower() in ("1", "true", "yes", "on")
+    return _env(name, str(default)).lower() in ("1", "true", "yes", "on")
+
+
+def _float(name: str, default: float) -> float:
+    return float(_env(name, str(default)))
+
+
+def _int(name: str, default: int) -> int:
+    return int(_env(name, str(default)))
 
 
 # Where everything is stored (SQLite db + downloaded media). Mounted as a Docker
 # volume so data survives container restarts.
-DATA_DIR = Path(os.environ.get("DATA_DIR", "./data")).resolve()
+DATA_DIR = Path(_env("DATA_DIR", "./data")).resolve()
 MEDIA_DIR = DATA_DIR / "media"
 DB_PATH = DATA_DIR / "kcna.db"
-DB_URL = os.environ.get("DB_URL", f"sqlite:///{DB_PATH}")
+DB_URL = _env("DB_URL", f"sqlite:///{DB_PATH}")
 
 # Source sites.
-BASE_URL = os.environ.get("KCNA_BASE_URL", "http://www.kcna.kp").rstrip("/")
-RODONG_BASE_URL = os.environ.get("RODONG_BASE_URL", "http://www.rodong.rep.kp").rstrip("/")
-VOK_BASE_URL = os.environ.get("VOK_BASE_URL", "http://www.vok.rep.kp").rstrip("/")
+BASE_URL = _env("KCNA_BASE_URL", "http://www.kcna.kp").rstrip("/")
+RODONG_BASE_URL = _env("RODONG_BASE_URL", "http://www.rodong.rep.kp").rstrip("/")
+VOK_BASE_URL = _env("VOK_BASE_URL", "http://www.vok.rep.kp").rstrip("/")
 # Per-site on/off switches.
 SCRAPE_KCNA = _bool("SCRAPE_KCNA", True)
 SCRAPE_RODONG = _bool("SCRAPE_RODONG", True)
@@ -27,14 +48,14 @@ SCRAPE_RODONG = _bool("SCRAPE_RODONG", True)
 # off by default; enable explicitly once the image is rebuilt with ffmpeg.
 SCRAPE_VOK = _bool("SCRAPE_VOK", False)
 # Rodong pages are large/slow; give them a longer timeout.
-RODONG_TIMEOUT = float(os.environ.get("RODONG_TIMEOUT", "60"))
+RODONG_TIMEOUT = _float("RODONG_TIMEOUT", 60)
 
 # VOK videos to subtitle (no auto-discovery yet — a curated seed list of video
 # IDs from /index.php/detail_com/vi_video/<id>). Comma-separated. Each entry may
 # optionally carry the Korean title as "id|한국어제목" (the detail page is
 # JS-rendered, so the no-JS scraper can't pull the title itself). The English
 # name is machine-translated from the Korean one.
-_VOK_RAW = os.environ.get("VOK_VIDEO_IDS", "ike260528004|명작동화그림책《토끼와 사자》")
+_VOK_RAW = _env("VOK_VIDEO_IDS", "ike260528004|명작동화그림책《토끼와 사자》")
 VOK_VIDEO_IDS: list[str] = []
 VOK_TITLES: dict[str, str] = {}
 for _e in _VOK_RAW.split(","):
@@ -51,15 +72,15 @@ for _e in _VOK_RAW.split(","):
         VOK_TITLES[_vid] = _ttl
 # Whisper model size for Korean ASR (tiny|base|small|medium). Bigger = better &
 # slower; "small" is a reasonable CPU default.
-WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+WHISPER_MODEL = _env("WHISPER_MODEL", "small")
 
 # --- Magazines (korean-books.com.kp PDFs) ----------------------------------
-KOREAN_BOOKS_BASE_URL = os.environ.get("KOREAN_BOOKS_BASE_URL",
-                                       "http://www.korean-books.com.kp").rstrip("/")
+KOREAN_BOOKS_BASE_URL = _env("KOREAN_BOOKS_BASE_URL",
+                             "http://www.korean-books.com.kp").rstrip("/")
 SCRAPE_MAGAZINES = _bool("SCRAPE_MAGAZINES", False)
 # Issues to process, "title|pdf_url" comma-separated. (Auto-discovery is a JS/
 # headless follow-up; this seed list validates the PDF pipeline first.)
-_MAG_RAW = os.environ.get(
+_MAG_RAW = _env(
     "MAGAZINE_ISSUES",
     "금수강산 2026년 6호|http://www.korean-books.com.kp/KBMbooks/ko/periodic/mountain/20260607151203.pdf")
 MAGAZINE_ISSUES: list[tuple[str, str]] = []
@@ -73,22 +94,22 @@ for _e in _MAG_RAW.split(","):
     else:
         MAGAZINE_ISSUES.append(("", _e))
 # Cap pages processed per issue (translation cost / safety).
-MAGAZINE_MAX_PAGES = int(os.environ.get("MAGAZINE_MAX_PAGES", "80"))
+MAGAZINE_MAX_PAGES = _int("MAGAZINE_MAX_PAGES", 80)
 # Render resolution for page images.
-MAGAZINE_DPI = int(os.environ.get("MAGAZINE_DPI", "120"))
+MAGAZINE_DPI = _int("MAGAZINE_DPI", 120)
 # Hard cap (seconds) on a single ffmpeg HLS download so a hung stream can't wedge
 # the run. The stream token is valid ~5 min, so downloads must be brisk anyway.
-VOK_DOWNLOAD_TIMEOUT = float(os.environ.get("VOK_DOWNLOAD_TIMEOUT", "600"))
+VOK_DOWNLOAD_TIMEOUT = _float("VOK_DOWNLOAD_TIMEOUT", 600)
 
 # Self-translation (KO->EN). Rodong's own English can't be reliably matched to
 # its Korean, so for Rodong we scrape Korean-only (photo articles) and generate
 # the English ourselves. Provider: "google_free" (keyless public endpoint),
 # "libretranslate" (self-hosted), "deepl", or "google".
-TRANSLATE_PROVIDER = os.environ.get("TRANSLATE_PROVIDER", "google_free").lower()
-TRANSLATE_API_KEY = os.environ.get("TRANSLATE_API_KEY", "").strip()
-TRANSLATE_API_URL = os.environ.get("TRANSLATE_API_URL", "").strip()  # LibreTranslate endpoint / override
-TRANSLATE_TARGET = os.environ.get("TRANSLATE_TARGET", "EN-US")
-TRANSLATE_TIMEOUT = float(os.environ.get("TRANSLATE_TIMEOUT", "60"))
+TRANSLATE_PROVIDER = _env("TRANSLATE_PROVIDER", "google_free").lower()
+TRANSLATE_API_KEY = _env("TRANSLATE_API_KEY", "")
+TRANSLATE_API_URL = _env("TRANSLATE_API_URL", "")  # LibreTranslate endpoint / override
+TRANSLATE_TARGET = _env("TRANSLATE_TARGET", "EN-US")
+TRANSLATE_TIMEOUT = _float("TRANSLATE_TIMEOUT", 60)
 
 # Only keep photo articles about self-reliance/food/agriculture/industry topics
 # (see app/topics.is_on_topic). Set TOPIC_FILTER=0 to mirror everything again.
@@ -103,32 +124,32 @@ HIDDEN_CATEGORY_KEYS = {
 
 # Languages to scrape, in priority order. Phase 1 focuses on Korean; English is
 # added in Phase 3 but the pipeline already supports it.
-LANGS = [s.strip() for s in os.environ.get("KCNA_LANGS", "kp,en").split(",") if s.strip()]
+LANGS = [s.strip() for s in _env("KCNA_LANGS", "kp,en").split(",") if s.strip()]
 
 # Politeness / reliability knobs for the slow, flaky origin.
-REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "30"))
-REQUEST_DELAY = float(os.environ.get("REQUEST_DELAY", "2.0"))   # seconds between requests
-MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "4"))
-MAX_ARTICLES_PER_RUN = int(os.environ.get("MAX_ARTICLES_PER_RUN", "60"))
+REQUEST_TIMEOUT = _float("REQUEST_TIMEOUT", 30)
+REQUEST_DELAY = _float("REQUEST_DELAY", 2.0)   # seconds between requests
+MAX_RETRIES = _int("MAX_RETRIES", 4)
+MAX_ARTICLES_PER_RUN = _int("MAX_ARTICLES_PER_RUN", 60)
 
 # Only mirror content newer than this many hours. Older articles are skipped
 # (and existing ones are hidden) so the mirror stays a rolling recent window.
 # Default: 5 days.
-MAX_AGE_HOURS = int(os.environ.get("MAX_AGE_HOURS", "120"))
+MAX_AGE_HOURS = _int("MAX_AGE_HOURS", 120)
 
 # Scheduler: how often the loop re-checks for new content.
-SCRAPE_INTERVAL_MIN = int(os.environ.get("SCRAPE_INTERVAL_MIN", "60"))
+SCRAPE_INTERVAL_MIN = _int("SCRAPE_INTERVAL_MIN", 60)
 
 # A real browser User-Agent — the site serves only a shell to unknown agents.
-USER_AGENT = os.environ.get(
+USER_AGENT = _env(
     "USER_AGENT",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 )
 
 # Web server.
-WEB_HOST = os.environ.get("WEB_HOST", "0.0.0.0")
-WEB_PORT = int(os.environ.get("WEB_PORT", "8000"))
+WEB_HOST = _env("WEB_HOST", "0.0.0.0")
+WEB_PORT = _int("WEB_PORT", 8000)
 
 
 def ensure_dirs() -> None:
