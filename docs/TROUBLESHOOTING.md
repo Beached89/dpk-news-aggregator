@@ -7,8 +7,8 @@ a good answer looks like. Everything below was run against this repository on 20
 
 There is no local server and no Docker container to check — see *How it runs* in the
 README. If you are looking for `docker compose`, that setup is retired in
-`legacy-docker/` (and `~/Desktop/DPRKLearning/` is an untracked pre-
-conversion copy of the project; do not diagnose against it — it has no workflows, no
+`legacy-docker/` (and a `DPRKLearning/` folder left beside this checkout is an untracked
+pre-conversion copy of the project; do not diagnose against it — it has no workflows, no
 `publish.py`, and a database last written 2026-10-11).
 
 ## 1. What is the site actually serving?

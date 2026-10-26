@@ -18,11 +18,11 @@ repository). Those are the same product at different stages, not three codebases
 
 | Item | Location |
 |---|---|
-| **Canonical repo and working copy** | `~/Desktop/dpk-news-aggregator/` |
+| **Canonical repo and working copy** | the `dpk-news-aggregator/` checkout (`~/Desktop/` here) |
 | **GitHub repo** | `https://github.com/Beached89/dpk-news-aggregator` (branch `main`) |
 | **Live site** | `https://beached89.github.io/dpk-news-aggregator/` (GitHub Pages) |
 | **Pipeline state** | Cloudflare R2 `state/kcna.db`, `state/translations.json` — **not configured yet**, so runs currently start from an empty database |
-| ⚠️ `~/Desktop/DPRKLearning/` | **Stale pre-conversion copy. Do not edit or diagnose from it.** No `.git`, no workflows, no `publish.py`/`rssfeed.py`/`tcache.py`, code frozen before the no-Docker conversion, `data/kcna.db` last written 2026-10-11 |
+| ⚠️ a `DPRKLearning/` folder beside this checkout | **Stale pre-conversion copy. Do not edit or diagnose from it.** No `.git`, no workflows, no `publish.py`/`rssfeed.py`/`tcache.py`, code frozen before the no-Docker conversion, `data/kcna.db` last written 2026-10-11 |
 
 That stale folder is not pure garbage: it still holds the only local `.env` (with
 `TRANSLATE_API_KEY`) and the only local `data/kcna.db` + `data/media` mirror. Move those
@@ -97,6 +97,10 @@ still a CDN dependency.
   site expects to be served.
 * Don't diagnose the live site from `Desktop/DPRKLearning`, and don't assume a local
   process or container is running — there isn't one.
+* Don't put machine-specific paths (`C:\Users\<name>\…`), personal e-mail addresses or
+  tokens in tracked files — write `~/Desktop/…` or name the folder instead. Commit
+  identity comes from your GitHub noreply address (`git config user.email`), which is
+  what later commits use; a real address baked into history is hard to remove.
 * Don't count on a `data/` directory existing locally; state lives in R2 once configured.
 
 ---
