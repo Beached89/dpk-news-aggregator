@@ -47,6 +47,12 @@ class Article(Base):
     body_html: Mapped[Optional[str]] = mapped_column(Text, default=None)
     body_text: Mapped[Optional[str]] = mapped_column(Text, default=None)
     published_date: Mapped[Optional[date_cls]] = mapped_column(Date, default=None, index=True)
+    # The exact publication moment when the source states one (RSS `pubDate`).
+    # KCNA/Rodong/VOK pages only give a day, so this stays NULL — and consumers
+    # must then avoid inventing an hour: counting up from midnight made every
+    # story published today read "16 hours ago" all afternoon. Stored naive UTC,
+    # same convention as scraped_at.
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=None)
     dateline: Mapped[Optional[str]] = mapped_column(Text, default=None)
     content_hash: Mapped[Optional[str]] = mapped_column(String(64), default=None)
     # Cross-source dedup grouping (normalized title + date). Same story in KCNA
@@ -273,6 +279,8 @@ def _migrate() -> None:
             conn.exec_driver_sql("ALTER TABLE articles ADD COLUMN pair_hash VARCHAR(64)")
         if cols and "align_json" not in cols:
             conn.exec_driver_sql("ALTER TABLE articles ADD COLUMN align_json TEXT")
+        if cols and "published_at" not in cols:
+            conn.exec_driver_sql("ALTER TABLE articles ADD COLUMN published_at DATETIME")
         # agri_facts: AI-estimate columns added later.
         fcols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(agri_facts)").fetchall()]
         if fcols and "is_ai" not in fcols:

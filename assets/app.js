@@ -80,17 +80,44 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
-  function relTime(story) {
+  function instantOf(story) {
+    // Only trust an hour when the source actually stated one. at_kind is
+    // "published" for feeds that carry pubDate, "scraped" when the export only
+    // knows when we fetched the story, and absent for a date-only story.
+    // Counting up from midnight is what made every story published today read
+    // "16 hours ago" all afternoon, so those get a day label instead.
+    if (!story || !story.at || story.at_kind !== 'published') return null;
+    var d = new Date(story.at);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function dayLabel(story) {
+    // Calendar-day distance in UTC, which is the zone the export stamps dates in.
     var d = dayParts(story);
-    if (!d) return 'undated';
-    var mins = Math.floor((Date.now() - d.getTime()) / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return mins + ' min ago';
-    var hours = Math.floor(mins / 60);
-    if (hours < 24) return hours + ' hour' + (hours === 1 ? '' : 's') + ' ago';
-    var days = Math.floor(hours / 24);
-    if (days < 30) return days + ' day' + (days === 1 ? '' : 's') + ' ago';
+    if (!d) return null;
+    var now = new Date();
+    var today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    var days = Math.floor((today - d.getTime()) / 86400000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 30) return days + ' days ago';
     return d.toISOString().slice(0, 10);
+  }
+
+  function relTime(story) {
+    var d = instantOf(story);
+    if (d) {
+      var mins = Math.floor((Date.now() - d.getTime()) / 60000);
+      if (mins < 0) mins = 0;              // source clock a little ahead of us
+      if (mins < 1) return 'just now';
+      if (mins < 60) return mins + ' min ago';
+      var hours = Math.floor(mins / 60);
+      if (hours < 24) return hours + ' hour' + (hours === 1 ? '' : 's') + ' ago';
+    }
+    var label = dayLabel(story);
+    if (label) return label;
+    var loose = dayParts(story);
+    return loose ? loose.toISOString().slice(0, 10) : 'undated';
   }
 
   function absDate(story) {
@@ -128,7 +155,8 @@
 
   /* --------------------------------------------------------------- coverage */
   function coverNode(story, cls) {
-    var wrap = el('div', 'cover-wrap ' + (cls || ''));
+    var wrap = el('div', 'cover-wrap ' + (cls || '') +
+      (story.cover_kind === 'placeholder' ? ' cover-ph' : ''));
     if (!story.cover) {
       wrap.appendChild(el('div', 'cover-none', 'no photo in source'));
       return wrap;

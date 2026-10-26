@@ -37,7 +37,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from . import config
+from . import config, placeholders
 
 log = logging.getLogger("publish")
 
@@ -65,6 +65,16 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 def _tables(conn: sqlite3.Connection) -> set[str]:
     return {r[0] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+
+
+def _article_columns(conn: sqlite3.Connection) -> set[str]:
+    """Column names on `articles` — a mirror restored from state can predate a
+    column that the scraper's migration adds, and publishing must not fail on
+    that (see _load_rows)."""
+    try:
+        return {r[1] for r in conn.execute("PRAGMA table_info(articles)").fetchall()}
+    except sqlite3.Error:
+        return set()
 
 
 def _media_of(conn: sqlite3.Connection, ids: list[int],
@@ -107,6 +117,34 @@ def _iso(value: Any) -> str | None:
     return value
 
 
+def _utc_instant(value: Any) -> str | None:
+    """Normalise a stored timestamp to `YYYY-MM-DDTHH:MM:SSZ`, or None.
+
+    SQLite hands back whatever the column was given — a `datetime` from
+    SQLAlchemy's DATETIME, or a bare `"2026-10-26 13:24:05.000000"` string — and
+    all of them are UTC by this project's convention. Two details matter:
+
+    * a plain `date` returns None: it carries no instant, and inventing midnight
+      is exactly what made every story of the day read "16 hours ago";
+    * the `Z` is not cosmetic — `new Date()` only treats an ISO string as UTC
+      when the offset is spelled out, so without it the browser shifts the
+      instant into local time and the label drifts again.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(
+                value.strip().replace(" ", "T", 1).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 # ------------------------------------------------------------------ building
 def _load_rows(conn: sqlite3.Connection, max_age_hours: int) -> list[sqlite3.Row]:
     """Every successfully fetched article row (both languages) newest-first.
@@ -121,11 +159,20 @@ def _load_rows(conn: sqlite3.Connection, max_age_hours: int) -> list[sqlite3.Row
         where.append("(a.published_date IS NULL OR a.published_date >= ?)")
         args.append((datetime.now(timezone.utc)
                      - timedelta(hours=max_age_hours)).strftime("%Y-%m-%d"))
+    # Databases written before `published_at` existed (or restored from state
+    # whose migration has not run yet) simply have no instant: alias it to NULL
+    # rather than raising, so an old mirror still publishes — with day labels.
+    cols = _article_columns(conn)
+    exact = "a.published_at" if "published_at" in cols else "NULL"
+    fetched = "a.scraped_at" if "scraped_at" in cols else "NULL"
     rows = conn.execute(
         f"SELECT a.id, a.hash, a.lang, a.source, a.url, a.title, a.subtitle, "
-        f"       a.body_text, a.published_date, a.dateline, a.dedup_key, a.align_json "
+        f"       a.body_text, a.published_date, {exact} AS published_at, "
+        f"       {fetched} AS scraped_at, "
+        f"       a.dateline, a.dedup_key, a.align_json "
         f"FROM articles a WHERE {' AND '.join(where)} "
-        f"ORDER BY (a.published_date IS NULL), a.published_date DESC, a.id DESC",
+        f"ORDER BY (a.published_date IS NULL), "
+        f"         COALESCE({exact}, a.published_date) DESC, a.id DESC",
         args).fetchall()
     return rows
 
@@ -150,6 +197,7 @@ def _stories(conn: sqlite3.Connection, rows: list[sqlite3.Row],
             st = {
                 "id": h,
                 "date": _iso(r["published_date"]),
+                "at": None, "at_kind": None,
                 "sources": [],
                 "url": r["url"],
                 "title_ko": None, "title_en": None,
@@ -175,6 +223,16 @@ def _stories(conn: sqlite3.Connection, rows: list[sqlite3.Row],
             st["url"] = r["url"]
         if not st["dateline"] and r["dateline"]:
             st["dateline"] = r["dateline"]
+        # Publication moment, and how much to trust it. "published" means the
+        # source stated it (RSS pubDate); "scraped" is the earliest moment we
+        # fetched the story, which says when it arrived here, not when it was
+        # written. The front end only counts minutes for "published".
+        if r["published_at"]:
+            st["at"], st["at_kind"] = _utc_instant(r["published_at"]), "published"
+        elif r["scraped_at"] and st["at_kind"] != "published":
+            arrived = _utc_instant(r["scraped_at"])
+            if arrived and (not st["at"] or arrived < st["at"]):
+                st["at"], st["at_kind"] = arrived, "scraped"
 
     stories = []
     for h in order:
@@ -208,16 +266,25 @@ def _stories(conn: sqlite3.Connection, rows: list[sqlite3.Row],
 def _card(st: dict) -> dict:
     """The compact list shape: enough for a card, nothing that bloats the feed."""
     body = st["body_ko"] or st["body_en"] or ""
-    cover = next((m["url"] for m in st["media"] if m["kind"] == "image"), None)
+    photo = next((m["url"] for m in st["media"] if m["kind"] == "image"), None)
+    # No photo in the source (common on the English RSS feeds): fall back to the
+    # generic pool in assets/placeholders, keyed on the story id so a card keeps
+    # the same art between runs. `cover_kind` lets the front end wash it out —
+    # decoration must never be mistaken for a photo of the story. The detail view
+    # deliberately keeps to real media only.
+    ph = None if photo else placeholders.pick(st["id"], config.PLACEHOLDER_SALT)
     return {
         "id": st["id"],
         "date": st["date"],
+        "at": st.get("at"),
+        "at_kind": st.get("at_kind"),
         "sources": st["sources"],
         "title_ko": st["title_ko"] or st["title_en"] or st["id"],
         "title_en": st["title_en"] or "",
         "dateline": st["dateline"],
         "categories": st["categories"],
-        "cover": cover,
+        "cover": photo or ph,
+        "cover_kind": "photo" if photo else ("placeholder" if ph else None),
         "videos": [m["url"] for m in st["media"] if m["kind"] == "video"],
         "snippet": body[:180].strip(),
         "has_translation": bool(st["title_en"] or st["body_en"]),

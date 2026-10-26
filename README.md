@@ -9,6 +9,8 @@ computer or on a server you pay for.**
 Live site: <https://beached89.github.io/dpk-news-aggregator/> — published by the
 pipeline on every successful run, with no cloud credentials configured.
 
+Something look wrong? Start at [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
+
 ## How it runs
 
 ```
@@ -54,6 +56,8 @@ Why this shape, and not one long-lived app:
 | `app/translate.py` | KO→EN client: batched keyless Google endpoint, DeepL, Google Cloud, LibreTranslate — plus `translate_to_ko()` for the English-native sources |
 | `app/tcache.py` | Persistent translation cache — the reason the free tiers are enough |
 | `app/publish.py` | SQLite → static JSON export (**stdlib only**, no heavy imports) |
+| `app/placeholders.py` | Generic cover art for stories with no source photo: id-keyed pick + the local pool builder (**stdlib only**) |
+| `assets/placeholders/` | The committed pool (50 images + `manifest.json` provenance); shipped to `site/` with the rest of `assets/` |
 | `app/analysis.py`, `app/align.py`, `app/agri_*` | Morphology, KO↔EN alignment, agriculture analysis |
 | `app/web.py` | FastAPI viewer for local use only (not deployed) |
 | `app/data/dict_ko_en.json` | Bundled KO→EN glossary used by the fallback translator |
@@ -63,7 +67,10 @@ Why this shape, and not one long-lived app:
 | `requirements-scrape.txt` | Dependency set used by CI — **includes `kiwipiepy`**; still no torch / whisper / PyMuPDF |
 | `requirements.txt` | Full local set, including the heavyweight analysis extras |
 | `tests/` | `pytest` suite; `tests/test_translate.py` runs offline |
-| `legacy-docker/`, `docs/`, `PROJECT_CONTEXT.md` | Retired container setup and older notes |
+| `legacy-docker/` | The retired container setup (Dockerfile, compose) kept for reference |
+| `docs/TROUBLESHOOTING.md` | "Why does the feed look stale?" — ordered checks with the commands that answer each |
+| `docs/ARCHITECTURE.md`, `docs/SCRAPING_NOTES.md` | Older design and scraping notes, carried over from the pre-conversion project |
+| `PROJECT_CONTEXT.md` | Orientation summary for a fresh session (kept short; README is authoritative) |
 
 `site/` (generated export), `data/` (SQLite + media) and `.env` are git-ignored.
 `/data/` is anchored to the repository root on purpose: an unanchored `data/`
@@ -149,7 +156,7 @@ learner reads as English; `TRANSLATE_KEEP_SOURCE_ON_FAIL=1` restores that.
 | File | Contents |
 |---|---|
 | `/data/manifest.json` | `generated_at`, `schema`, counts, `sources`, `media_local` |
-| `/data/articles.json` | the card list, newest-first: `id`, `date`, `sources`, `title_ko`, `title_en`, `dateline`, `categories`, `cover`, `videos`, `snippet`, `has_translation`, `has_alignment`, `group` — deliberately compact, **no url and no body text** |
+| `/data/articles.json` | the card list, newest-first: `id`, `date`, `at`, `at_kind`, `sources`, `title_ko`, `title_en`, `dateline`, `categories`, `cover`, `cover_kind`, `videos`, `snippet`, `has_translation`, `has_alignment`, `group` — deliberately compact, **no url and no body text** |
 | `/data/a/<hash>.json` | one story: `url`, full `body_ko`, `body_en`, parsed `align` (KO/EN per sentence + word pairs), `media`, `subtitle`, `dedup_key` |
 | `/data/categories.json` | nav with per-category counts, hidden categories removed |
 | `/data/agri.json` | agriculture facts, place observations, commodity and end-use tables |
@@ -163,6 +170,83 @@ link — that merge is load-bearing, not decoration.
 A `hash` is one article (Korean on the `kp` row, English on the `en` row of the same
 hash); `group` lists the hashes of the same report from different sources, so the
 client can collapse duplicates the way `app/web.py` does.
+
+### Cover art for stories with no photo
+
+Many stories — effectively every English RSS item — have no image in the source.
+Instead of "no photo in source" on a third of the front page, `publish._card()` gives
+those cards generic art from the committed pool in `assets/placeholders/`:
+
+* `cover` carries the path and `cover_kind` says which it is (`"photo"`,
+  `"placeholder"`, or `null` when the pool is missing, which keeps the honest
+  "no photo in source" text). `app.js` adds `.cover-ph` for the placeholder case and
+  the CSS washes it out, so decoration is never mistaken for reportage.
+* The pick is keyed on the story id, so it is **stable between 6-hourly runs** rather
+  than reshuffling on every deploy. `PLACEHOLDER_SALT` re-rolls everything at once.
+* Nothing is fetched at runtime. `_copy_static()` already ships all of `assets/` into
+  `site/`, so there is no extra workflow step and no credentials involved.
+* Detail pages are deliberately excluded: `_detail()` carries real `media` only.
+
+Refresh or review it locally (not in CI):
+
+```bash
+python -m app.placeholders                        # fill missing slots (50)
+python -m app.placeholders --replace-slots 7,31   # swap individual slots
+```
+
+`assets/placeholders/manifest.json` records each photo's Lorem Picsum id, photographer,
+source URL and sha256, plus `retired_ids` — photos rejected by review, which are never
+offered again. Licence: free to use, no attribution required (https://picsum.photos/license).
+
+## How much the timestamp is telling you
+
+`date` is the publication **day** and is always safe to print. KCNA, Rodong, VOK and the
+magazines state no hour, so the export does not invent one: `at` is a UTC instant and
+`at_kind` says what it is worth.
+
+| `at_kind` | Meaning | Front end shows |
+|---|---|---|
+| `published` | the source stated the moment — RSS `pubDate` (38 North, Daily NK) | `20 min ago`, `3 hours ago` |
+| `scraped` | only the fetch time is known: when it arrived here, not when it was written | a day label |
+| absent | no instant available | a day label |
+
+Day labels are `today`, `yesterday`, `N days ago`, then the absolute date past 30 days.
+The list is ordered by `COALESCE(published_at, published_date)`, so within one day an
+09:00 story sits above one from 02:00 rather than behind it by row id.
+
+## Persisting pipeline state (R2)
+
+Optional — but without it every run is a clean slate, which is what makes a working
+pipeline look like a dead one: the site shows only what the last few hours found,
+nothing is deduped against earlier runs, and `data/translations.json` starts cold so the
+same Korean is retranslated four times a day against a rate-limited keyless endpoint.
+A run in this state now says so — the log carries a **Pipeline state is not persisted**
+warning and the run summary spells out the consequences.
+
+Set it up once (R2 free tier: 10 GB, no egress charges). `gh` is used here; the same
+values can be set in Settings → Secrets and variables → Actions.
+
+```bash
+# 1. an R2 S3 API token scoped read/write to the bucket:
+#    Cloudflare dashboard -> R2 -> Manage R2 API Tokens
+gh secret set R2_ACCESS_KEY_ID < r2-access-key.txt
+gh secret set R2_SECRET_ACCESS_KEY < r2-secret-key.txt
+
+# 2. where the bucket is
+gh variable set R2_ENDPOINT --body 'https://<account>.r2.cloudflarestorage.com'
+gh variable set R2_BUCKET    --body 'dpk-news'
+```
+
+Create the bucket itself in the dashboard (private is fine — the site reads media from
+`site/media`, not R2, unless you opt into `MIRROR_MEDIA`). Two objects live in it,
+`state/kcna.db` and `state/translations.json`: each run restores them before scraping
+and writes them back afterwards, VACUUMed. `workflow_dispatch` has a **fresh_state**
+checkbox to ignore them deliberately, and concurrency on the workflow key means two runs
+can never race on the same object.
+
+Switching it on does not backfill history: a story the origins no longer list cannot be
+recovered. If you want the deepest first mirror possible, widen the window for one run
+(`gh variable set MAX_AGE_HOURS --body 720`), then set it back to `120`.
 
 ## Local development
 
@@ -226,6 +310,18 @@ way the workflow does, copy `data/media` to `site/media` first.
   defaults to the relative `media` — the previous `/media` default would have resolved above
   a project Pages site even with the files present. A missing image degrades to an
   "image unavailable" box instead of a broken icon.
+* **"16 hours ago" every afternoon — the export invented midnight.** `published_date`
+  is a SQLite `DATE`, and `assets/app.js` turned `"2026-10-26"` into `...T00:00:00Z`
+  before counting minutes, so all of today's stories shared one label that climbed
+  steadily all day: a feed that reads frozen while it is in fact serving today's news
+  (a story published 23:50 looked as old as one from 00:05). The RSS sources *do* state
+  the hour and `app/rssfeed.py` already parsed it — it was just dropped at insert time,
+  because `published_date` has nowhere to keep it. The mirror now stores it in
+  `articles.published_at` (`app/db.py:_migrate()` adds the column to an existing
+  database) and the export emits `at` + `at_kind` as described in *Data contract*.
+  `relTime()` counts minutes only when `at_kind` is `published` and otherwise labels by
+  calendar day. Existing rows are unaffected: `_load_rows` aliases the column to `NULL`
+  when a restored database predates the migration, so publishing cannot fail on it.
 * **The page keeps its looks from a CDN.** `index.html` pulls Tailwind and Noto Serif from
   `cdn.tailwindcss.com` / Google Fonts, the way the mock did. The data path does not need
   them — rendering was verified with those hosts blocked — but without access to them the

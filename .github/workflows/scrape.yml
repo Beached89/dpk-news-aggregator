@@ -99,6 +99,31 @@ jobs:
           echo "sources     : kcna=${SCRAPE_KCNA:-config} rodong=${SCRAPE_RODONG:-config} vok=${SCRAPE_VOK:-config} 38north=${SCRAPE_38NORTH:-config} dailynk=${SCRAPE_DAILYNK:-config}"
           echo "age window  : ${MAX_AGE_HOURS:-config} hours"
 
+      # Running without R2 is supported, but it must not be *silent*: with no
+      # state the run scrapes against an empty database, so the site shows only
+      # what the last few hours found and nothing is deduped against history.
+      # That looks exactly like a frozen feed, which is worth a warning.
+      - name: Check state persistence
+        run: |
+          set -uo pipefail
+          if [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "::warning title=Pipeline state is not persisted::R2_BUCKET or the R2 credentials are unset, so this run scraped an empty database. The site will only ever show what these last few hours found, with no cross-run dedup and a cold translation cache. See README: Persisting pipeline state."
+            {
+              echo "### Pipeline state: **not persisted**"
+              echo ""
+              echo "No \`R2_BUCKET\` / R2 credentials, so this run started from an empty database."
+              echo ""
+              echo "- the site shows only what this run found — there is no history"
+              echo "- nothing is deduped against earlier runs"
+              echo "- the translation cache starts cold, so the same text is retranslated every 6 hours"
+              echo ""
+              echo "Add the secrets \`R2_ACCESS_KEY_ID\` / \`R2_SECRET_ACCESS_KEY\` and the variables"
+              echo "\`R2_ENDPOINT\` / \`R2_BUCKET\` — README, *Persisting pipeline state*."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "state store : R2 s3://$R2_BUCKET/state (persisting)"
+          fi
+
       - name: Restore pipeline state from R2
         if: ${{ inputs.fresh_state != true && vars.R2_BUCKET != '' }}
         run: |

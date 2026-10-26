@@ -1007,6 +1007,11 @@ def _rss_store_row(item, spec: dict, body: str, status: str = "processing") -> N
         row.body_text = body
         row.dateline = _rss_dateline(item, spec["label"])
         row.published_date = item.published
+        # Keep the exact moment the feed stated (pubDate) instead of flattening it
+        # to a day: this is what lets the site say "4 hours ago" rather than count
+        # up from midnight. Naive UTC, matching scraped_at below.
+        row.published_at = (item.published_dt.replace(tzinfo=None)
+                            if item.published_dt else None)
         row.dedup_key = None
         row.status = status
         row.scraped_at = datetime.utcnow()
@@ -1102,6 +1107,8 @@ def _rss_translate_ko(item, spec: dict, body: str) -> int:
         row.body_text = joined
         row.dateline = _rss_dateline(item, spec["label"])
         row.published_date = item.published
+        row.published_at = (item.published_dt.replace(tzinfo=None)
+                            if item.published_dt else None)
         # "fetched", not "processing": publish.py only folds fetched rows, so a
         # row left in processing would silently contribute no Korean at all.
         row.status = "fetched"

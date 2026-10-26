@@ -196,6 +196,12 @@ USER_AGENT = _env(
 WEB_HOST = _env("WEB_HOST", "0.0.0.0")
 WEB_PORT = _int("WEB_PORT", 8000)
 
+# Cards for stories the source has no photo for draw a generic image from the
+# pool in assets/placeholders (see app/placeholders.py). The pick is keyed on the
+# story id, so it is stable across runs; change the salt to re-roll every
+# assignment at once, e.g. after refreshing the pool.
+PLACEHOLDER_SALT = _env("PLACEHOLDER_SALT", "")
+
 
 def ensure_dirs() -> None:
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
