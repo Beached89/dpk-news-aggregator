@@ -1,0 +1,374 @@
+{
+  "generated": "2026-10-26T15:29:39+00:00",
+  "source": "https://picsum.photos",
+  "licence": "Lorem Picsum \u2014 free to use, no attribution required (https://picsum.photos/license)",
+  "note": "Provenance only: ids, source URLs and checksums evidence the licence. Photographer names are deliberately not recorded - assets/ is served publicly and Lorem Picsum requires no attribution.",
+  "size": [
+    800,
+    450
+  ],
+  "grayscale": false,
+  "retired_ids": [
+    "1",
+    "2",
+    "3",
+    "30",
+    "31",
+    "45",
+    "64",
+    "65",
+    "73"
+  ],
+  "images": [
+    {
+      "file": "ph-01.jpg",
+      "picsum_id": "0",
+      "source_url": "https://picsum.photos/id/0/800/450",
+      "bytes": 38253,
+      "sha256": "2dc9ca15aeca6afc93159695dfd89d19523c9cdda20ae40e443a273d3ddf8cc3"
+    },
+    {
+      "file": "ph-02.jpg",
+      "picsum_id": "69",
+      "source_url": "https://picsum.photos/id/69/800/450",
+      "bytes": 50601,
+      "sha256": "7063fe2912b42b801498c913db40a45d21526c30f55a4f4d7236d99cc2d96541"
+    },
+    {
+      "file": "ph-03.jpg",
+      "picsum_id": "10",
+      "source_url": "https://picsum.photos/id/10/800/450",
+      "bytes": 55029,
+      "sha256": "19ad0af31a1dfdce7da7bf71561eceee72c6825e58c23fa537c079c9ba94a980"
+    },
+    {
+      "file": "ph-04.jpg",
+      "picsum_id": "11",
+      "source_url": "https://picsum.photos/id/11/800/450",
+      "bytes": 38180,
+      "sha256": "f78ec8d50bc819aef1502c43389cf42f9aa51e051d44c630905c4df17117d27c"
+    },
+    {
+      "file": "ph-05.jpg",
+      "picsum_id": "20",
+      "source_url": "https://picsum.photos/id/20/800/450",
+      "bytes": 49795,
+      "sha256": "b0c13f724a573bf3c0d59c6123fa067c9d06334a0be228b109618b8660cad280"
+    },
+    {
+      "file": "ph-06.jpg",
+      "picsum_id": "26",
+      "source_url": "https://picsum.photos/id/26/800/450",
+      "bytes": 40757,
+      "sha256": "bab8091fa2682ce5e35c548307ed18e5382222197300513dc3f437a24a4af068"
+    },
+    {
+      "file": "ph-07.jpg",
+      "picsum_id": "27",
+      "source_url": "https://picsum.photos/id/27/800/450",
+      "bytes": 54760,
+      "sha256": "c2690bd272b4f8c9d2c4328a4f184910c5506bfdab4af1fc8caf17c97688e7b2"
+    },
+    {
+      "file": "ph-08.jpg",
+      "picsum_id": "28",
+      "source_url": "https://picsum.photos/id/28/800/450",
+      "bytes": 110663,
+      "sha256": "5d4858b06f35c2a822821e6dc27d3cf0663eec310e9bc06ee747d40cd4d03816"
+    },
+    {
+      "file": "ph-09.jpg",
+      "picsum_id": "29",
+      "source_url": "https://picsum.photos/id/29/800/450",
+      "bytes": 107347,
+      "sha256": "e7d4b3baa2238611b43bcb0190b0f2c31ab0668ad3ee3cc769e2c1655e74b5f9"
+    },
+    {
+      "file": "ph-10.jpg",
+      "picsum_id": "76",
+      "source_url": "https://picsum.photos/id/76/800/450",
+      "bytes": 99415,
+      "sha256": "79e548f68dbb0dee2d5ac77a318e4f40810442ed8e7d02ad788b2c30d19e0c43"
+    },
+    {
+      "file": "ph-11.jpg",
+      "picsum_id": "12",
+      "source_url": "https://picsum.photos/id/12/800/450",
+      "bytes": 48420,
+      "sha256": "09cd3ad3fc6794b95b8e117b53b980ee31330d765fcabd52bd68daf201c2c7fc"
+    },
+    {
+      "file": "ph-12.jpg",
+      "picsum_id": "32",
+      "source_url": "https://picsum.photos/id/32/800/450",
+      "bytes": 68838,
+      "sha256": "77c232fdcc959a70d9f0efc68c1b38f74cd15676a6ef057bcbc2f5ea06230a29"
+    },
+    {
+      "file": "ph-13.jpg",
+      "picsum_id": "34",
+      "source_url": "https://picsum.photos/id/34/800/450",
+      "bytes": 96955,
+      "sha256": "a43e00b733ae68f7180bb5fcc9eb79d8d80d0cc2c968589cd69b3d4b0cc32a91"
+    },
+    {
+      "file": "ph-14.jpg",
+      "picsum_id": "35",
+      "source_url": "https://picsum.photos/id/35/800/450",
+      "bytes": 37073,
+      "sha256": "c038865d8911a426bd4de0f07f5162431d6db9d06236daf9f0fad81946570d03"
+    },
+    {
+      "file": "ph-15.jpg",
+      "picsum_id": "36",
+      "source_url": "https://picsum.photos/id/36/800/450",
+      "bytes": 44782,
+      "sha256": "20b2cfa8757385e66ffdfaa99c8ab0fae0e62303e5bf9a8507cdc434a26729b5"
+    },
+    {
+      "file": "ph-16.jpg",
+      "picsum_id": "37",
+      "source_url": "https://picsum.photos/id/37/800/450",
+      "bytes": 47858,
+      "sha256": "b21c311aa8f4db9f10c79b58e8c4904cf485eb702be41f3ee363961ed3d55a24"
+    },
+    {
+      "file": "ph-17.jpg",
+      "picsum_id": "38",
+      "source_url": "https://picsum.photos/id/38/800/450",
+      "bytes": 32316,
+      "sha256": "75b2775e59b6da355ce7ea961db061c5b6d1ee32542d485f733ca9f7917cd2a2"
+    },
+    {
+      "file": "ph-18.jpg",
+      "picsum_id": "39",
+      "source_url": "https://picsum.photos/id/39/800/450",
+      "bytes": 19382,
+      "sha256": "0f96e2bcef2257e73260fafddfb8fa64750a055ece58db055bd6acee7dc31ab7"
+    },
+    {
+      "file": "ph-19.jpg",
+      "picsum_id": "40",
+      "source_url": "https://picsum.photos/id/40/800/450",
+      "bytes": 48129,
+      "sha256": "d6aa7921e3458f876f40f19fe367e758ebe841e33c33ed24868759fc05531130"
+    },
+    {
+      "file": "ph-20.jpg",
+      "picsum_id": "41",
+      "source_url": "https://picsum.photos/id/41/800/450",
+      "bytes": 43933,
+      "sha256": "31a93bacca547a28e0ad0c96a0410ec2faa05a2daeb3888455fd112d01364e26"
+    },
+    {
+      "file": "ph-21.jpg",
+      "picsum_id": "42",
+      "source_url": "https://picsum.photos/id/42/800/450",
+      "bytes": 38101,
+      "sha256": "3658e602b74f600765f591c2a57e5215d32626f0f53172ac7061a53389e89613"
+    },
+    {
+      "file": "ph-22.jpg",
+      "picsum_id": "43",
+      "source_url": "https://picsum.photos/id/43/800/450",
+      "bytes": 57550,
+      "sha256": "fc0dd4605b2a99bcc5c00b0bcaf9176560e6cd0795342b6d3a22dc2fabfc534e"
+    },
+    {
+      "file": "ph-23.jpg",
+      "picsum_id": "44",
+      "source_url": "https://picsum.photos/id/44/800/450",
+      "bytes": 22865,
+      "sha256": "30ea26c35b5cfe801610adfbb71fe206034240e72c8c0e85a3f43c9687522947"
+    },
+    {
+      "file": "ph-24.jpg",
+      "picsum_id": "13",
+      "source_url": "https://picsum.photos/id/13/800/450",
+      "bytes": 77870,
+      "sha256": "f5bb6818f1412aed3f81de0eed41cddecc91cd24a3574c9ecc73a83de30763f9"
+    },
+    {
+      "file": "ph-25.jpg",
+      "picsum_id": "46",
+      "source_url": "https://picsum.photos/id/46/800/450",
+      "bytes": 54811,
+      "sha256": "88ca5284cde666cd3cea1d8d7144c037bba74883c603b1a08ecc8a6f05dcbd59"
+    },
+    {
+      "file": "ph-26.jpg",
+      "picsum_id": "47",
+      "source_url": "https://picsum.photos/id/47/800/450",
+      "bytes": 40481,
+      "sha256": "037a745bdc2179c39f1425cf0d696b5eadf74859d14722b0ac13d44b671a3b65"
+    },
+    {
+      "file": "ph-27.jpg",
+      "picsum_id": "49",
+      "source_url": "https://picsum.photos/id/49/800/450",
+      "bytes": 40159,
+      "sha256": "d450264fb8907eaffa70d7ef2e79fd2af6a4ec1242bb2fade0a27154a1681151"
+    },
+    {
+      "file": "ph-28.jpg",
+      "picsum_id": "50",
+      "source_url": "https://picsum.photos/id/50/800/450",
+      "bytes": 62378,
+      "sha256": "d3c896a60920caffb8a7151dcffab9b4c896f7a8b9057fbc0f96ffc3703f896d"
+    },
+    {
+      "file": "ph-29.jpg",
+      "picsum_id": "51",
+      "source_url": "https://picsum.photos/id/51/800/450",
+      "bytes": 45318,
+      "sha256": "d916716624c63d611778e886067623f53ee81c264967a66d5e78c0b9fc6f5067"
+    },
+    {
+      "file": "ph-30.jpg",
+      "picsum_id": "52",
+      "source_url": "https://picsum.photos/id/52/800/450",
+      "bytes": 37331,
+      "sha256": "d113ae87521ba118edf4c59235ef7a0785d257b7449935a7037883d1c36b2549"
+    },
+    {
+      "file": "ph-31.jpg",
+      "picsum_id": "53",
+      "source_url": "https://picsum.photos/id/53/800/450",
+      "bytes": 25152,
+      "sha256": "c585bea8766d50659749ddbb172bef199a73315ddf16d9d294bca8ce3bc7f927"
+    },
+    {
+      "file": "ph-32.jpg",
+      "picsum_id": "54",
+      "source_url": "https://picsum.photos/id/54/800/450",
+      "bytes": 48874,
+      "sha256": "94449fbd3595ae48aea4a91f094941ebe40e49d1f2e15815796f90da40771a50"
+    },
+    {
+      "file": "ph-33.jpg",
+      "picsum_id": "55",
+      "source_url": "https://picsum.photos/id/55/800/450",
+      "bytes": 65707,
+      "sha256": "0bd367aae52a5f5cfd9988df0b2708e3affeaacb1950a97c202bf315b8f8fae9"
+    },
+    {
+      "file": "ph-34.jpg",
+      "picsum_id": "56",
+      "source_url": "https://picsum.photos/id/56/800/450",
+      "bytes": 24474,
+      "sha256": "f5cb15f4c7ce03c47f0508400549ad566df047caabf65e97f6271ae4e167f0ee"
+    },
+    {
+      "file": "ph-35.jpg",
+      "picsum_id": "57",
+      "source_url": "https://picsum.photos/id/57/800/450",
+      "bytes": 72313,
+      "sha256": "74d9d563aa244e43c1f8d93ac9c76f0776a8526a4e860664f42da6ad21f9b2d6"
+    },
+    {
+      "file": "ph-36.jpg",
+      "picsum_id": "58",
+      "source_url": "https://picsum.photos/id/58/800/450",
+      "bytes": 54158,
+      "sha256": "745de55fdcbd4b69338fef2f058d600d25c4ab89b4657cf2239d5ddd723c6d19"
+    },
+    {
+      "file": "ph-37.jpg",
+      "picsum_id": "59",
+      "source_url": "https://picsum.photos/id/59/800/450",
+      "bytes": 66976,
+      "sha256": "aa4765b8fb320eae1ec4320c1d11cce8f67d75e3c06f4b8a434a511dca2e6890"
+    },
+    {
+      "file": "ph-38.jpg",
+      "picsum_id": "61",
+      "source_url": "https://picsum.photos/id/61/800/450",
+      "bytes": 72004,
+      "sha256": "858e4fffa0456f49dd49cb820e536fc4f49704afb4669760c38a92362389e8c4"
+    },
+    {
+      "file": "ph-39.jpg",
+      "picsum_id": "62",
+      "source_url": "https://picsum.photos/id/62/800/450",
+      "bytes": 37915,
+      "sha256": "0e16b995517ec807ee04ecd6f4ad9ea6f2601dea0dd479b0dbf5b61a17029fb9"
+    },
+    {
+      "file": "ph-40.jpg",
+      "picsum_id": "63",
+      "source_url": "https://picsum.photos/id/63/800/450",
+      "bytes": 13181,
+      "sha256": "349a63a406a0e4b11c6f586479c79103a7444e4daf0bdc49a33b487db4068e2f"
+    },
+    {
+      "file": "ph-41.jpg",
+      "picsum_id": "48",
+      "source_url": "https://picsum.photos/id/48/800/450",
+      "bytes": 22322,
+      "sha256": "1ebcb678485bce061032ae4ac9a3d24c8b4a024da3ba2f86b96169810499f83e"
+    },
+    {
+      "file": "ph-42.jpg",
+      "picsum_id": "60",
+      "source_url": "https://picsum.photos/id/60/800/450",
+      "bytes": 25128,
+      "sha256": "ade4fc87f0541ac15bb331ed604b988ef92bf0a403c8a4e771a315968a60180e"
+    },
+    {
+      "file": "ph-43.jpg",
+      "picsum_id": "67",
+      "source_url": "https://picsum.photos/id/67/800/450",
+      "bytes": 63380,
+      "sha256": "c72f203e1aa6af05f755dbab35690fc1e9391a68453744bd641009e00b550a55"
+    },
+    {
+      "file": "ph-44.jpg",
+      "picsum_id": "68",
+      "source_url": "https://picsum.photos/id/68/800/450",
+      "bytes": 40487,
+      "sha256": "6db44370aca386b061d4838e06effe70d95df516151de8b326f053acc0e88756"
+    },
+    {
+      "file": "ph-45.jpg",
+      "picsum_id": "70",
+      "source_url": "https://picsum.photos/id/70/800/450",
+      "bytes": 62336,
+      "sha256": "924e19dbc221a4985645cbdfdf065ae92b748eb51410f51e2ba206691dba9a13"
+    },
+    {
+      "file": "ph-46.jpg",
+      "picsum_id": "71",
+      "source_url": "https://picsum.photos/id/71/800/450",
+      "bytes": 85343,
+      "sha256": "31ad9b86838b0ab1013a1631f6b86f49b405ad97d42faa557ef72d2028db24cd"
+    },
+    {
+      "file": "ph-47.jpg",
+      "picsum_id": "72",
+      "source_url": "https://picsum.photos/id/72/800/450",
+      "bytes": 68675,
+      "sha256": "6d0660736228fb6ed30a284bed67eca196cf21272afdc881feb3fca5472696d1"
+    },
+    {
+      "file": "ph-48.jpg",
+      "picsum_id": "66",
+      "source_url": "https://picsum.photos/id/66/800/450",
+      "bytes": 39916,
+      "sha256": "b0cf0048b3c772c94fd5a2df64ae421e248c9c130e337f9adf70b49421b3a81f"
+    },
+    {
+      "file": "ph-49.jpg",
+      "picsum_id": "74",
+      "source_url": "https://picsum.photos/id/74/800/450",
+      "bytes": 50584,
+      "sha256": "a7d0e806e2d10fce6a45cc6dff4b0f258fa459731c6a5620bf91c3f71528e860"
+    },
+    {
+      "file": "ph-50.jpg",
+      "picsum_id": "75",
+      "source_url": "https://picsum.photos/id/75/800/450",
+      "bytes": 55590,
+      "sha256": "3821da1ad8c12125fa7b331eca5407c61df89b8a1c8180e5b0cb1274e82937f3"
+    }
+  ]
+}

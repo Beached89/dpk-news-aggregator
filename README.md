@@ -57,7 +57,7 @@ Why this shape, and not one long-lived app:
 | `app/tcache.py` | Persistent translation cache — the reason the free tiers are enough |
 | `app/publish.py` | SQLite → static JSON export (**stdlib only**, no heavy imports) |
 | `app/placeholders.py` | Generic cover art for stories with no source photo: id-keyed pick + the local pool builder (**stdlib only**) |
-| `assets/placeholders/` | The committed pool (50 images + `manifest.json` provenance); shipped to `site/` with the rest of `assets/` |
+| `assets/placeholders/` | The committed pool (50 images), shipped to `site/` with the rest of `assets/`; provenance lives in `docs/placeholder-provenance.json` so it is not served |
 | `app/analysis.py`, `app/align.py`, `app/agri_*` | Morphology, KO↔EN alignment, agriculture analysis |
 | `app/web.py` | FastAPI viewer for local use only (not deployed) |
 | `app/data/dict_ko_en.json` | Bundled KO→EN glossary used by the fallback translator |
@@ -194,9 +194,12 @@ python -m app.placeholders                        # fill missing slots (50)
 python -m app.placeholders --replace-slots 7,31   # swap individual slots
 ```
 
-`assets/placeholders/manifest.json` records each photo's Lorem Picsum id, photographer,
-source URL and sha256, plus `retired_ids` — photos rejected by review, which are never
-offered again. Licence: free to use, no attribution required (https://picsum.photos/license).
+`docs/placeholder-provenance.json` records each photo's Lorem Picsum id, source URL
+and sha256, plus `retired_ids` — photos rejected by review, which are never offered
+again. It sits in `docs/`, not `assets/`, so it is never deployed: photographer names
+are not recorded anywhere, because Picsum requires no attribution and ids plus
+checksums are sufficient licence evidence. Licence: free to use without attribution
+(https://picsum.photos/license).
 
 ## How much the timestamp is telling you
 

@@ -40,7 +40,12 @@ log = logging.getLogger("kcna.placeholders")
 APP_DIR = Path(__file__).parent
 POOL_DIR = APP_DIR.parent / "assets" / "placeholders"
 URL_PREFIX = "assets/placeholders"
-MANIFEST_NAME = "manifest.json"
+# Provenance lives OUTSIDE assets/, deliberately: everything under assets/ is
+# copied into site/ and served to the public, and the only field that ever held a
+# personal name there was the photographer credited by Lorem Picsum. Ids, URLs and
+# checksums are enough to evidence the licence, and Picsum requires no attribution,
+# so no names are recorded at all (see docs/placeholder-provenance.json).
+PROVENANCE_PATH = APP_DIR.parent / "docs" / "placeholder-provenance.json"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 # Lorem Picsum: a curated mirror of freely usable stock photography. No account,
@@ -122,17 +127,18 @@ def _looks_like_image(data: bytes) -> bool:
             or data[:4] == b"GIF8" or (data[:4] == b"RIFF" and data[8:12] == b"WEBP"))
 
 
-def _read_manifest(dest: Path) -> dict:
+def _read_manifest() -> dict:
     try:
-        data = json.loads((dest / MANIFEST_NAME).read_text(encoding="utf-8"))
+        data = json.loads(PROVENANCE_PATH.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
 
 
-def _write_manifest(dest: Path, manifest: dict) -> None:
-    (dest / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2) + "\n",
-                                      encoding="utf-8")
+def _write_manifest(manifest: dict) -> None:
+    PROVENANCE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PROVENANCE_PATH.write_text(json.dumps(manifest, indent=2) + "\n",
+                               encoding="utf-8")
 
 
 def _download(pid, width: int, height: int, grayscale: bool) -> tuple[bytes, str]:
@@ -184,8 +190,10 @@ def _candidates(count: int, pages: int = 10, exclude_ids: set[str] | None = None
     return _balance(photos)[:count]
 
 
-def _entry(name: str, pid, author, url: str, data: bytes) -> dict:
-    return {"file": name, "picsum_id": str(pid), "picsum_author": author,
+def _entry(name: str, pid, url: str, data: bytes) -> dict:
+    """One provenance record. Deliberately no photographer name: this file is
+    licence evidence, not a credit list, and ids plus checksums do that job."""
+    return {"file": name, "picsum_id": str(pid),
             "source_url": url, "bytes": len(data),
             "sha256": hashlib.sha256(data).hexdigest()}
 
@@ -193,14 +201,14 @@ def _entry(name: str, pid, author, url: str, data: bytes) -> dict:
 def build_pool(count: int = 50, width: int = 800, height: int = 450,
                grayscale: bool = False, force: bool = False,
                delay: float | None = None) -> int:
-    """Scrape `count` generic images into the pool + write the manifest.
+    """Scrape `count` generic images into the pool + write the provenance file.
 
     Idempotent: existing files are kept unless `force`, and a kept file keeps the
     provenance of the pick that produced it rather than the new candidate's."""
     dest = POOL_DIR
     dest.mkdir(parents=True, exist_ok=True)
     pause = config.REQUEST_DELAY if delay is None else delay
-    existing = _read_manifest(dest)
+    existing = _read_manifest()
     retired = {str(x) for x in existing.get("retired_ids") or []}
 
     photos = _candidates(count, exclude_ids=retired)
@@ -217,12 +225,11 @@ def build_pool(count: int = 50, width: int = 800, height: int = 450,
         name = f"ph-{i:0{pad}d}.jpg"
         target = dest / name
         prior = known.get(name) or {}
-        pid, author = str(p["id"]), p.get("author")
+        pid = str(p["id"])
         if target.exists() and not force:
             log.info("%s exists — keeping", name)
             data = target.read_bytes()
             pid = prior.get("picsum_id") or pid
-            author = prior.get("picsum_author") or author
             url = prior.get("source_url") or \
                 IMG_API.format(pid=pid, width=width, height=height)
         else:
@@ -233,10 +240,10 @@ def build_pool(count: int = 50, width: int = 800, height: int = 450,
                 continue
             target.write_bytes(data)
             time.sleep(pause)
-        entries.append(_entry(name, pid, author, url, data))
+        entries.append(_entry(name, pid, url, data))
         log.info("saved %s (%d bytes, picsum id %s)", name, len(data), pid)
 
-    _write_manifest(dest, {
+    _write_manifest({
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": "https://picsum.photos", "licence": LICENCE_NOTE,
         "size": [width, height], "grayscale": grayscale,
@@ -257,22 +264,20 @@ def replace_slots(slots: list[int], ids: list[str] | None = None,
     `ph-11.jpg` is slot 11. New photos come from `ids` when supplied, otherwise
     from candidates neither in the pool nor retired by an earlier review."""
     dest = POOL_DIR
-    manifest = _read_manifest(dest)
+    manifest = _read_manifest()
     entries: list[dict] = manifest.get("images") or []
     if not entries:
-        raise RuntimeError(f"no manifest in {dest} — run a full build first")
+        raise RuntimeError(f"no provenance in {PROVENANCE_PATH} — run a full build first")
     pause = config.REQUEST_DELAY if delay is None else delay
     retired = {str(x) for x in manifest.get("retired_ids") or []}
 
     fresh: list[dict] = []
     if not ids:
         used = {str(e.get("picsum_id")) for e in entries if e.get("picsum_id")}
-        authors = {e.get("picsum_author") for e in entries if e.get("picsum_author")}
-        # Prefer photographers the pool does not carry at all: consecutive Picsum
-        # ids are one person's series, so a new id by the same author tends to be
-        # a near twin of a photo already in there.
-        fresh = _candidates(len(slots), exclude_ids=used | retired,
-                            exclude_authors=authors)
+        # Author-level exclusion is gone on purpose: provenance no longer stores
+        # photographer names. The same-series risk is handled by MAX_PER_AUTHOR
+        # inside _candidates(), and the reviewer eyeballs the replacement anyway.
+        fresh = _candidates(len(slots), exclude_ids=used | retired)
         if len(fresh) < len(slots):
             fresh = _candidates(len(slots), exclude_ids=used | retired)
         if len(fresh) < len(slots):
@@ -285,7 +290,7 @@ def replace_slots(slots: list[int], ids: list[str] | None = None,
                         slot, len(entries))
             continue
         pid = ids[n - 1] if ids and n <= len(ids) else None
-        photo = {"id": pid, "author": None} if ids else fresh[n - 1]
+        photo = {"id": pid} if ids else fresh[n - 1]
         if not photo.get("id"):
             log.warning("slot %d: no id supplied — skipped", slot)
             continue
@@ -297,7 +302,7 @@ def replace_slots(slots: list[int], ids: list[str] | None = None,
             log.warning("slot %d (picsum %s) failed: %s", slot, photo["id"], e)
             continue
         (dest / name).write_bytes(data)
-        entries[slot - 1] = _entry(name, photo["id"], photo.get("author"), url, data)
+        entries[slot - 1] = _entry(name, photo["id"], url, data)
         if dropped:                        # never offer a rejected photo again
             retired.add(str(dropped))
         replaced += 1

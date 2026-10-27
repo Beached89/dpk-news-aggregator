@@ -48,9 +48,11 @@ sheet.save("contact_sheet.jpg", quality=88)
 
 ## Licence & provenance
 
-`manifest.json` records the Picsum id, photographer, source URL and sha256 of
-every file. Lorem Picsum's photos are free to use without attribution
-(https://picsum.photos/license).
+`docs/placeholder-provenance.json` (kept out of this folder on purpose — everything
+under `assets/` is copied into `site/` and served publicly) records the Picsum id,
+source URL and sha256 of every file. Lorem Picsum's photos are free to use without
+attribution (https://picsum.photos/license), so no photographer names are recorded;
+ids and checksums are enough to evidence the licence.
 
-`manifest.json` also carries `retired_ids`: photos rejected by review. They are
-never offered again, so a rejected image can't creep back in on a later build.
+That file also carries `retired_ids`: photos rejected by review. They are never
+offered again, so a rejected image can't creep back in on a later build.

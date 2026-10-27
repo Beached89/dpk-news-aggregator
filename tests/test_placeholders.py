@@ -101,15 +101,42 @@ def test_every_shipped_placeholder_is_a_real_image():
 
 
 def test_manifest_covers_every_file_and_records_rejects():
-    manifest = json.loads((placeholders.POOL_DIR / "manifest.json").read_text("utf-8"))
-    assert manifest["source"] == "https://picsum.photos"
-    assert manifest["licence"].startswith("Lorem Picsum")
-    assert {e["file"] for e in manifest["images"]} == set(placeholders.pool_files())
-    for e in manifest["images"]:
+    provenance = json.loads(placeholders.PROVENANCE_PATH.read_text("utf-8"))
+    assert provenance["source"] == "https://picsum.photos"
+    assert provenance["licence"].startswith("Lorem Picsum")
+    assert {e["file"] for e in provenance["images"]} == set(placeholders.pool_files())
+    for e in provenance["images"]:
         assert e["picsum_id"] and e["sha256"] and e["source_url"]
     # A photo rejected by review must never be handed out again.
-    assert {e["picsum_id"] for e in manifest["images"]}.isdisjoint(
-        set(manifest.get("retired_ids") or []))
+    assert {e["picsum_id"] for e in provenance["images"]}.isdisjoint(
+        set(provenance.get("retired_ids") or []))
+
+
+def test_provenance_stores_no_personal_names_and_is_not_deployed():
+    """assets/ is copied into site/ and served; provenance records only ids, URLs and
+    checksums and lives outside it, so the public export carries no third-party names."""
+    provenance = json.loads(placeholders.PROVENANCE_PATH.read_text("utf-8"))
+    allowed = {"file", "picsum_id", "source_url", "bytes", "sha256"}
+    for e in provenance["images"]:
+        assert set(e) <= allowed, f"unexpected provenance field: {set(e) - allowed}"
+    assert not any("author" in k.lower() for e in provenance["images"] for k in e)
+    assert not str(placeholders.PROVENANCE_PATH).startswith(
+        str(placeholders.APP_DIR.parent / "assets"))
+
+
+def test_provenance_roundtrip(tmp_path, monkeypatch):
+    """The builder writes and re-reads the provenance file at its new location."""
+    monkeypatch.setattr(placeholders, "PROVENANCE_PATH",
+                        tmp_path / "docs" / "placeholder-provenance.json")
+    entry = placeholders._entry("ph-01.jpg", "1015",
+                                "https://picsum.photos/id/1015/800/450", b"x" * 4096)
+    placeholders._write_manifest({"images": [entry], "retired_ids": ["1016"]})
+
+    got = placeholders._read_manifest()
+    assert got["images"][0]["file"] == "ph-01.jpg"
+    assert got["images"][0]["picsum_id"] == "1015"
+    assert "picsum_author" not in got["images"][0]
+    assert got["retired_ids"] == ["1016"]
 
 
 # --------------------------------------------------------- publish.py::_card
